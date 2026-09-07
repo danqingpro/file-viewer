@@ -1,0 +1,88 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "com.example.notepadpp"
+    // flutter_tts compiles against SDK 36; pin it explicitly so the build
+    // doesn't trip on the "requires Android SDK version 36" warning and
+    // so we don't depend on whichever SDK flutter.compileSdkVersion picks.
+    compileSdk = 36
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.notepadpp"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // flutter_tts requires minSdk 24 (Android 7.0), which still covers
+        // ~99% of active devices.
+        minSdk = 24
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.debug
+        }
+    }
+
+    // Lint initialization can fail on some JDK/AGP combos in CI; it is not
+    // needed to produce a working release APK, so skip it.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    // FileProvider (used by the auto-update flow to share the downloaded
+    // APK with the system installer). Brought in explicitly even though
+    // some plugins pull it transitively.
+    implementation 'androidx.core:core:1.13.1'
+}
+
+// Rename the Flutter-built APK to "<程序名>_<版本号>_<编译日期>.apk" so each
+// build is easy to tell apart. Flutter always emits "app-release.apk", so we
+// rename it in a buildFinished hook (the only reliable hook that runs after
+// Flutter's own copy step).
+gradle.buildFinished {
+    // Flutter emits the APK under the root project's build dir, not the
+    // app module's: <root>/build/app/outputs/flutter-apk/app-release.apk
+    def apkDir = new File("${project.rootProject.buildDir}/app/outputs/flutter-apk")
+    if (!apkDir.exists()) return
+    def buildDate = new Date().format("yyyyMMdd")
+    def vName = flutter.versionName
+    apkDir.listFiles().each { file ->
+        if (file.name ==~ /app-.*\.apk/) {
+            def newFile = new File(apkDir, "文件查看器_${vName}_${buildDate}.apk")
+            // Copy (not rename) so Flutter's post-build check still finds
+            // app-release.apk; the user-friendly copy lives alongside it.
+            new FileOutputStream(newFile).withStream { out ->
+                file.withInputStream { inp -> out << inp }
+            }
+            println "Copied APK -> ${newFile.name}"
+        }
+    }
+}

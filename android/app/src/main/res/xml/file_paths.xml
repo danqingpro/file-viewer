@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paths the FileProvider is allowed to share with other apps.
+     The auto-update flow downloads the APK to the app's cache dir
+     (getTemporaryDirectory) and needs to hand it to the system installer. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="cache" path="." />
+    <files-path name="files" path="." />
+    <external-cache-path name="external_cache" path="." />
+</paths>
