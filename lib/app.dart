@@ -5,10 +5,12 @@ import 'core/config/app_info.dart';
 import 'core/config/app_settings.dart';
 import 'core/config/app_theme.dart';
 import 'core/editor_kernel/editor_state.dart';
+import 'core/update/background_update_service.dart';
 import 'core/update/update_dialog.dart' show manualCheckForUpdate, UpdateDialog;
 import 'editor_service.dart';
 import 'ui/about/about_page.dart';
 import 'ui/binary_viewer/binary_viewer.dart';
+import 'ui/binary_viewer/large_binary_viewer.dart';
 import 'ui/pdf_viewer/pdf_viewer.dart';
 import 'ui/word_viewer/word_viewer.dart';
 import 'ui/editor_view/editor_view.dart';
@@ -78,10 +80,12 @@ class _EditorShellState extends State<EditorShell> {
     super.initState();
     _service = EditorService()..addListener(_onServiceChanged);
     _focusNode = FocusNode();
+    BackgroundUpdateService.instance.addListener(_onBackgroundUpdate);
   }
 
   @override
   void dispose() {
+    BackgroundUpdateService.instance.removeListener(_onBackgroundUpdate);
     _service.removeListener(_onServiceChanged);
     _service.dispose();
     _focusNode.dispose();
@@ -91,6 +95,37 @@ class _EditorShellState extends State<EditorShell> {
   void _onServiceChanged() {
     if (mounted) setState(() {});
   }
+
+  void _onBackgroundUpdate() {
+    if (mounted) setState(() {});
+    // When the background download finishes, surface a SnackBar so the
+    // user knows the APK is ready to install (in case the banner was
+    // missed or the app was backgrounded).
+    final bg = BackgroundUpdateService.instance;
+    if (bg.state == BackgroundUpdateState.ready &&
+        _lastShownBgState != BackgroundUpdateState.ready) {
+      _lastShownBgState = BackgroundUpdateState.ready;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('新版本 ${bg.info?.latestVersion} 已下载完成'),
+          action: SnackBarAction(
+            label: '安装',
+            onPressed: () => bg.install(),
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } else if (bg.state == BackgroundUpdateState.failed) {
+      _lastShownBgState = BackgroundUpdateState.failed;
+    } else if (bg.state == BackgroundUpdateState.idle) {
+      _lastShownBgState = BackgroundUpdateState.idle;
+    }
+  }
+
+  /// Tracks the last banner state we surfaced a SnackBar for, so we
+  /// don't re-show the "ready" SnackBar on every notifyListeners().
+  BackgroundUpdateState _lastShownBgState = BackgroundUpdateState.idle;
 
   /// Toggle the workspace drawer. Called from the menu bar "切换工作区"
   /// button and from the "打开文件夹作为工作区" flow (auto-open).
@@ -305,54 +340,68 @@ class _EditorShellState extends State<EditorShell> {
             body: SafeArea(
               top: true,
               bottom: true,
-              child: Column(
+              child: Stack(
                 children: [
-                  EditorMenuBar(
-                    service: _service,
-                    onAbout: _openAbout,
-                    settings: widget.settings,
-                    onRename: _onRename,
-                    onFeedback: _onFeedback,
-                    onCheckUpdate: _onCheckUpdate,
-                    onOpenWorkspace: _openWorkspace,
-                    onToggleWorkspace: _toggleWorkspaceDrawer,
-                    onCloseTab: () => _closeTabWithConfirm(_service.activeIndex),
+                  Column(
+                    children: [
+                      EditorMenuBar(
+                        service: _service,
+                        onAbout: _openAbout,
+                        settings: widget.settings,
+                        onRename: _onRename,
+                        onFeedback: _onFeedback,
+                        onCheckUpdate: _onCheckUpdate,
+                        onOpenWorkspace: _openWorkspace,
+                        onToggleWorkspace: _toggleWorkspaceDrawer,
+                        onCloseTab: () => _closeTabWithConfirm(_service.activeIndex),
+                      ),
+                      _TabStrip(service: _service, onCloseTab: _closeTabWithConfirm),
+                      const Divider(height: 1, color: Color(0xFFE0E0E0)),
+                      Expanded(
+                        child: active == null
+                            ? const _EmptyState()
+                            : active.isPdf
+                                ? PdfViewer(key: ValueKey(active), tab: active)
+                                : active.isWord
+                                    ? WordViewer(
+                                        key: ValueKey(active), tab: active)
+                                    : active.isLargeBinary
+                                        ? LargeBinaryViewer(
+                                            key: ValueKey(active), tab: active)
+                                        : active.isBinary
+                                            ? BinaryViewer(
+                                                key: ValueKey(active),
+                                                tab: active,
+                                                onBytesChanged:
+                                                    _service.updateBinaryBytes,
+                                              )
+                                            : EditorView(
+                                                key: ValueKey(active),
+                                                tab: active,
+                                                highlightPlugin: _service.highlightPlugin,
+                                                onTextChanged: _service.onTextChanged,
+                                                onSelectionChanged: _service.onSelectionChanged,
+                                                onControllerAttached: _service.bindLiveController,
+                                                onControllerDetached: _service.unbindLiveController,
+                                              ),
+                      ),
+                      if (active != null)
+                        StatusBar(
+                          tab: active,
+                          fileTypeLabel: _service.fileTypeLabelFor(active),
+                          byteSize: _byteSizeOf(active),
+                          onEncodingChanged: (enc) => _service.switchEncoding(enc),
+                          onLanguageChanged: (lang) => _service.setLanguage(lang),
+                        ),
+                    ],
                   ),
-                  _TabStrip(service: _service, onCloseTab: _closeTabWithConfirm),
-                  const Divider(height: 1, color: Color(0xFFE0E0E0)),
-                  Expanded(
-                    child: active == null
-                        ? const _EmptyState()
-                        : active.isPdf
-                            ? PdfViewer(key: ValueKey(active), tab: active)
-                            : active.isWord
-                                ? WordViewer(
-                                    key: ValueKey(active), tab: active)
-                                : active.isBinary
-                                    ? BinaryViewer(
-                                        key: ValueKey(active),
-                                        tab: active,
-                                        onBytesChanged:
-                                            _service.updateBinaryBytes,
-                                      )
-                                    : EditorView(
-                              key: ValueKey(active),
-                              tab: active,
-                              highlightPlugin: _service.highlightPlugin,
-                              onTextChanged: _service.onTextChanged,
-                              onSelectionChanged: _service.onSelectionChanged,
-                              onControllerAttached: _service.bindLiveController,
-                              onControllerDetached: _service.unbindLiveController,
-                            ),
+                  // Floating background-update banner pinned to the bottom.
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: const _BackgroundUpdateBanner(),
                   ),
-                  if (active != null)
-                    StatusBar(
-                      tab: active,
-                      fileTypeLabel: _service.fileTypeLabelFor(active),
-                      byteSize: _byteSizeOf(active),
-                      onEncodingChanged: (enc) => _service.switchEncoding(enc),
-                      onLanguageChanged: (lang) => _service.setLanguage(lang),
-                    ),
                 ],
               ),
             ),
@@ -363,6 +412,9 @@ class _EditorShellState extends State<EditorShell> {
   }
 
   int _byteSizeOf(EditorTabController tab) {
+    // Large binary tabs keep their true size (never held in memory).
+    if (tab.isLargeBinary) return tab.largeBinaryLength;
+    if (tab.isBinary) return tab.bytes?.length ?? 0;
     // Live byte length of the current buffer in UTF-8 — accurate for the
     // status bar regardless of whether the file has been saved.
     try {
@@ -476,6 +528,103 @@ class _TabChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Floating banner that reflects the background update download state.
+/// Hidden when idle. Shows progress while downloading, an install action
+/// when ready, and an error message if the download failed.
+class _BackgroundUpdateBanner extends StatelessWidget {
+  const _BackgroundUpdateBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: BackgroundUpdateService.instance,
+      builder: (context, _) {
+        final bg = BackgroundUpdateService.instance;
+        if (bg.state == BackgroundUpdateState.idle) {
+          return const SizedBox.shrink();
+        }
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final cardColor = isDark ? const Color(0xFF2D2D30) : Colors.white;
+        final fg = isDark ? Colors.white : Colors.black87;
+        final accent = Theme.of(context).primaryColor;
+
+        return Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(8),
+          color: cardColor,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  bg.state == BackgroundUpdateState.ready
+                      ? Icons.system_update_alt
+                      : bg.state == BackgroundUpdateState.failed
+                          ? Icons.error_outline
+                          : Icons.download_rounded,
+                  color: bg.state == BackgroundUpdateState.failed
+                      ? Colors.red.shade400
+                      : accent,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (bg.state == BackgroundUpdateState.downloading)
+                        Text(
+                          '后台下载新版本 ${bg.info?.latestVersion}：${(bg.progress * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(color: fg, fontSize: 13),
+                        )
+                      else if (bg.state == BackgroundUpdateState.ready)
+                        Text(
+                          '新版本 ${bg.info?.latestVersion} 已下载完成，可立即安装',
+                          style: TextStyle(color: fg, fontSize: 13),
+                        )
+                      else
+                        Text(
+                          bg.error ?? '后台下载失败',
+                          style: TextStyle(color: Colors.red.shade400, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (bg.state == BackgroundUpdateState.downloading) ...[
+                        const SizedBox(height: 6),
+                        LinearProgressIndicator(
+                          value: bg.progress.clamp(0.0, 1.0),
+                          backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                          color: accent,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (bg.state == BackgroundUpdateState.ready)
+                  TextButton(
+                    onPressed: () => bg.install(),
+                    child: const Text('安装'),
+                  )
+                else if (bg.state == BackgroundUpdateState.downloading)
+                  TextButton(
+                    onPressed: () => bg.dismiss(),
+                    child: const Text('取消'),
+                  )
+                else
+                  TextButton(
+                    onPressed: () => bg.dismiss(),
+                    child: const Text('关闭'),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

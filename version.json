@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.5",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.5/file-viewer-1.10.5.apk",
-  "changelog": "1.10.5：APK 下载支持断点续传（HTTP Range）；关闭标签页时若文件未保存弹出保存/不保存/取消确认对话框；Ctrl+W、标签页 X、菜单栏均走统一确认流程",
+  "latestVersion": "1.10.6",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.6/file-viewer-1.10.6.apk",
+  "changelog": "1.10.6：更新支持后台自动更新（退出更新弹窗提示后台下载，完成后一键安装）；大二进制文件（≥1MB）按需加载，仅渲染可视区域并在滚动时增量读取；预留帧长/帧数量/关键字查找扩展",
   "forceUpdate": false
 }

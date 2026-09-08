@@ -23,6 +23,13 @@ class EditorTabController extends ChangeNotifier {
   /// tab is rendered by the binary viewer instead of the text editor.
   Uint8List? _bytes;
 
+  /// Whether this tab holds a large binary file opened in on-demand mode.
+  /// Large binaries are NOT kept in memory; the viewer reads byte ranges
+  /// from disk as the user scrolls. [largeBinaryLength] carries the file
+  /// size in bytes.
+  bool _largeBinary = false;
+  int _binaryLength = 0;
+
   // Undo/redo stacks. Entries are full snapshots to keep the kernel tiny;
   // a future "coalescing" plugin can replace this without touching the UI.
   final List<String> _undo = [];
@@ -39,6 +46,8 @@ class EditorTabController extends ChangeNotifier {
   int get selectionEnd => _selectionEnd;
   Uint8List? get bytes => _bytes;
   bool get isBinary => _bytes != null;
+  bool get isLargeBinary => _largeBinary;
+  int get largeBinaryLength => _binaryLength;
 
   /// Whether this tab holds a PDF file (based on path extension). PDF tabs
   /// are stored as binary bytes but rendered by the dedicated PdfViewer.
@@ -111,6 +120,30 @@ class EditorTabController extends ChangeNotifier {
   }) {
     _path = path;
     _bytes = bytes;
+    _largeBinary = false;
+    _binaryLength = bytes.length;
+    _language = 'binary';
+    _encoding = 'BINARY';
+    _dirty = false;
+    _undo.clear();
+    _redo.clear();
+    _cursorOffset = 0;
+    _selectionEnd = 0;
+    _label = _baseName(path);
+    notifyListeners();
+  }
+
+  /// Bind a large binary file (.exe/.apk/.bin…) for on-demand viewing.
+  /// Unlike [bindBinary], the bytes are NOT read into memory — the viewer
+  /// reads ranges from [path] on scroll. [length] is the file size.
+  void bindLargeBinary({
+    required String path,
+    required int length,
+  }) {
+    _path = path;
+    _bytes = null;
+    _largeBinary = true;
+    _binaryLength = length;
     _language = 'binary';
     _encoding = 'BINARY';
     _dirty = false;

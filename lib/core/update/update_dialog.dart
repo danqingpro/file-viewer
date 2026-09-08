@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'background_update_service.dart';
 import 'update_info.dart';
 import 'update_service.dart';
 
@@ -115,7 +116,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
       actions: [
         if (!widget.info.forceUpdate && !_downloading)
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _onDefer,
             child: const Text('稍后'),
           ),
         if (_downloading)
@@ -130,6 +131,34 @@ class _UpdateDialogState extends State<UpdateDialog> {
           ),
       ],
     );
+  }
+
+  /// Called when the user taps "稍后". Instead of just closing, ask
+  /// whether the update should keep downloading in the background so the
+  /// APK is ready when the user next opens the app.
+  Future<void> _onDefer() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('后台下载更新'),
+        content: Text(
+            '是否在后台继续下载新版本 ${widget.info.latestVersion}？\n下载完成后可在应用内直接安装。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('否'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('后台下载'),
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      BackgroundUpdateService.instance.start(widget.info);
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 }
 

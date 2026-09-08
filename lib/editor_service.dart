@@ -165,6 +165,11 @@ class EditorService extends ChangeNotifier {
     'java', 'log',
   ];
 
+  /// Binary files at or above this size (in bytes) are opened in on-demand
+  /// (chunked) mode instead of being loaded fully into memory. Below it,
+  /// the file is small enough to edit safely in the standard hex viewer.
+  static const int _largeBinaryThreshold = 1024 * 1024; // 1 MiB
+
   Future<void> openFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -184,6 +189,9 @@ class EditorService extends ChangeNotifier {
   Future<bool> saveActive() async {
     final tab = active;
     if (tab == null) return false;
+    // Large binaries are read-only on-demand views; there's nothing to
+    // write back (and writing tab.text would corrupt the file).
+    if (tab.isLargeBinary) return true;
     if (tab.path == null) return saveActiveAs();
 
     // Try a direct write first (works for files opened from the app's
@@ -211,6 +219,8 @@ class EditorService extends ChangeNotifier {
   Future<bool> saveActiveAs() async {
     final tab = active;
     if (tab == null) return false;
+    // Large binary on-demand views are read-only; exporting is out of scope.
+    if (tab.isLargeBinary) return false;
     final ext = tab.path != null ? _extOf(tab.path!) : 'txt';
     // Default filename carries the app version number so "另存为" exports are
     // immediately identifiable, e.g. `report_v1.6.0.txt`.
@@ -263,6 +273,8 @@ class EditorService extends ChangeNotifier {
   Future<bool> reloadActive() async {
     final tab = active;
     if (tab == null || tab.path == null) return false;
+    // On-demand views always read straight from disk; nothing to reload.
+    if (tab.isLargeBinary) return true;
     try {
       if (tab.isBinary) {
         final bytes = await _fileKernel.readBytes(tab.path!);
@@ -289,6 +301,8 @@ class EditorService extends ChangeNotifier {
   Future<bool> saveActiveCopy() async {
     final tab = active;
     if (tab == null) return false;
+    // Large binary on-demand views are read-only.
+    if (tab.isLargeBinary) return false;
     final ext = tab.path != null ? _extOf(tab.path!) : 'txt';
     final base = _stripExtension(tab.label);
     final Uint8List bytes = tab.isBinary
@@ -369,6 +383,8 @@ class EditorService extends ChangeNotifier {
   Future<(bool, String?)> renameActiveTo(String newName) async {
     final tab = active;
     if (tab == null || tab.path == null) return (false, '没有可重命名的文件');
+    // Large binary on-demand views are read-only.
+    if (tab.isLargeBinary) return (false, '只读大文件不支持重命名');
     final oldPath = tab.path!;
 
     // Reject content URIs (SAF) — can't be renamed directly.
@@ -519,10 +535,20 @@ class EditorService extends ChangeNotifier {
         final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
         _tabs.add(tab);
       } else if (isBin) {
-        // Binary file: read raw bytes and bind to the hex viewer.
-        final bytes = await _fileKernel.readBytes(path);
-        final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
-        _tabs.add(tab);
+        // Binary file: small files load fully into memory and are editable
+        // in hex; large files (.exe/.apk/…) open in on-demand mode so the
+        // app doesn't freeze reading tens of megabytes at once.
+        final binaryFile = File(path);
+        final size = binaryFile.lengthSync();
+        if (size >= _largeBinaryThreshold) {
+          final tab = EditorTabController()
+            ..bindLargeBinary(path: path, length: size);
+          _tabs.add(tab);
+        } else {
+          final bytes = await _fileKernel.readBytes(path);
+          final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
+          _tabs.add(tab);
+        }
       } else {
         final loaded = await _fileKernel.read(path);
         final lang = _fileType.detect(path);
@@ -610,6 +636,8 @@ class EditorService extends ChangeNotifier {
   Future<void> switchEncoding(String encoding) async {
     final tab = active;
     if (tab == null) return;
+    // Large binary on-demand views are read-only byte data, not text.
+    if (tab.isLargeBinary) return;
     final path = tab.path;
     if (path == null) {
       tab.setEncoding(encoding);

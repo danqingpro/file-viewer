@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.5';
+  static const String version = '1.10.6';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.5';
+  static const String versionNumber = '1.10.6';
 
   /// Internal build number.
-  static const int buildNumber = 17;
+  static const int buildNumber = 18;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -73,6 +73,18 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.6',
+      date: '2026-09-08',
+      title: '后台自动更新 + 大文件按需加载',
+      changes: [
+        '新增：更新功能支持后台自动更新，退出更新弹窗时提示是否后台下载，下载完成后可一键安装',
+        '新增：后台下载悬浮横幅（进度/完成/失败三态）+ 完成时 SnackBar 安装提示',
+        '新增：大二进制文件（≥1MB 的 .exe/.apk/.bin 等）按需加载，仅渲染可视区域，滚动时增量读取，避免大文件卡顿',
+        '扩展：大文件查看器预留帧长（8/16/32）、帧数量统计与关键字/十六进制字节查找，便于后续按帧长/关键字定位',
+        '版本号升级至 1.10.6',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.5',
       date: '2026-09-08',
