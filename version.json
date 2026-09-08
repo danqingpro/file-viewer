@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.8.0",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.8.0/file-viewer-1.8.0.apk",
-  "changelog": "1.8.0：PDF 预览插件、意见反馈（文字+图片/视频/压缩包，推送到 GitHub Issue）、修复文件重命名、修复工作区文件打不开",
+  "latestVersion": "1.9.0",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.9.0/file-viewer-1.9.0.apk",
+  "changelog": "1.9.0：手动检查更新（帮助菜单）、修复文件重命名功能、多镜像源提高更新检查可达性",
   "forceUpdate": false
 }
