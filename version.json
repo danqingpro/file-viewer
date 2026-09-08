@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.3",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.3/file-viewer-1.10.3.apk",
-  "changelog": "1.10.3：新增 Word 文档预览插件（.doc/.docx 系统查看器只读）；修复更新检测——所有镜像不可达时静默返回 null 导致误报已是最新版本；checkForUpdate 新增 succeeded 计数器，所有镜像均失败时抛出 UpdateFetchException",
+  "latestVersion": "1.10.4",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.4/file-viewer-1.10.4.apk",
+  "changelog": "1.10.4：二进制查看新增 .exe / .apk 支持；新增 docs/RELEASE_WORKFLOW.md 发布工作流检查清单；修复 github_config.dart token 硬编码问题",
   "forceUpdate": false
 }

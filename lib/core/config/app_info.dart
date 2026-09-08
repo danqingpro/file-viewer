@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.3';
+  static const String version = '1.10.4';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.3';
+  static const String versionNumber = '1.10.4';
 
   /// Internal build number.
-  static const int buildNumber = 15;
+  static const int buildNumber = 16;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -40,7 +40,7 @@ class AppInfo {
     '打开文件夹作为工作区（可折叠文件树）',
     '保存逻辑：首次保存需选择路径，再次保存直接写入原路径',
     '多格式语法高亮：txt / md / cpp / h / hpp / json / xml / html / css / js / py / yaml / bat',
-    '二进制文件查看：.bin / .bit / .raw / .dat 十六进制查看与编辑',
+    '二进制文件查看：.bin / .bit / .raw / .dat / .exe / .apk 十六进制查看与编辑',
     'Word 文档预览：.doc / .docx 调用系统查看器渲染（只读）',
     '代码格式化：JSON / XML / C++ 基础排版',
     '跨平台语音播报：选中文本或全文播报，暂停 / 继续 / 停止',
@@ -73,6 +73,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.4',
+      date: '2026-09-08',
+      title: '二进制查看新增 EXE / APK + 发布工作流文档',
+      changes: [
+        '新增：二进制查看插件识别范围扩展至 .exe / .apk',
+        '新增：docs/RELEASE_WORKFLOW.md 发布工作流检查清单，覆盖版本号、构建、推送、tag、Release、APK 上传全流程',
+        '修复：github_config.dart token 清空，避免 GitHub Push Protection 拦截',
+        '版本号升级至 1.10.4',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.3',
       date: '2026-09-08',
