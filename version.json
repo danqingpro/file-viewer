@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.9.0",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.9.0/file-viewer-1.9.0.apk",
-  "changelog": "1.9.0：手动检查更新（帮助菜单）、修复文件重命名功能、多镜像源提高更新检查可达性",
+  "latestVersion": "1.10.0",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.0/file-viewer-1.10.0.apk",
+  "changelog": "1.10.0：工作区改为 Drawer 抽屉式面板，不再常驻占用编辑区空间，工具栏/视图菜单可折叠展开，边缘滑动/遮罩/返回键关闭",
   "forceUpdate": false
 }
