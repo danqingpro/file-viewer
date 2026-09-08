@@ -23,13 +23,19 @@ import 'update_info.dart';
 class UpdateService {
   UpdateService({http.Client? client}) : _client = client ?? http.Client();
 
-  /// URL of the hosted `version.json`. For a GitHub repo this is the
-  /// raw.githubusercontent.com address, e.g.:
-  ///   https://raw.githubusercontent.com/<owner>/<repo>/main/version.json
-  /// Using jsDelivr CDN gives better speed inside China:
-  ///   https://cdn.jsdelivr.net/gh/<owner>/<repo>@main/version.json
-  static const String kUpdateCheckUrl =
-      'https://cdn.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json';
+  /// URLs of the hosted `version.json`, ordered by freshness + reachability
+  /// in China (first-to-try).
+  ///
+  ///   1. fastly.jsdelivr.net — fast CDN mirror, low cache TTL, reachable in CN
+  ///   2. raw.githubusercontent.com — direct GitHub raw (often blocked /
+  ///      timing out in China, 15s timeout)
+  ///   3. cdn.jsdelivr.net — legacy jsDelivr mirror, **long cache TTL** for
+  ///      GitHub raw files; placed last as a true last resort
+  static const List<String> kUpdateCheckUrls = [
+    'https://fastly.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
+    'https://raw.githubusercontent.com/danqingpro/file-viewer/main/version.json',
+    'https://cdn.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
+  ];
 
   final http.Client _client;
 
@@ -45,28 +51,68 @@ class UpdateService {
   Future<String> get currentVersion async => (await packageInfo).version;
 
   /// Check for an update. Returns the [UpdateInfo] if a newer version is
-  /// available, otherwise `null`. Network/parse errors are swallowed so a
-  /// failed check never disrupts the editor.
+  /// available, `null` if no newer version exists (all reachable mirrors
+  /// say current or older), and throws a [UpdateFetchException] if every
+  /// configured mirror failed (network error / timeout / non-200).
+  ///
+  /// Unlike the previous "first-success wins" approach, this method tries
+  /// **all** configured mirrors and picks the **highest** version returned.
+  /// This defends against stale CDN caches (e.g. jsDelivr often serves
+  /// version.json from days ago even though the main branch has moved
+  /// forward — the old code would incorrectly conclude "already up to date"
+  /// because the stale version is numerically less than the installed one).
+  ///
+  /// A second bug fixed here: if **all** mirrors are unreachable, the
+  /// method used to silently return `null`, which the caller interpreted
+  /// as "already up to date" — hiding genuine network failures. Now we
+  /// throw [UpdateFetchException] so the UI can show a proper error.
   Future<UpdateInfo?> checkForUpdate() async {
-    try {
-      final resp = await _client
-          .get(Uri.parse(kUpdateCheckUrl))
-          .timeout(const Duration(seconds: 10));
-      if (resp.statusCode != 200) return null;
+    final current = await currentVersion;
 
-      final json = _parseJson(resp.body);
-      if (json == null) return null;
+    // Best (highest-version) result collected from any mirror so far.
+    UpdateInfo? best;
 
-      final info = UpdateInfo.fromJson(json);
-      if (info.apkUrl.isEmpty) return null;
+    // Count how many mirrors we tried and how many succeeded. If zero
+    // succeeded, throw — the caller must distinguish "no update" from
+    // "can't reach server".
+    int attempted = 0;
+    int succeeded = 0;
 
-      final current = await currentVersion;
-      if (!_isNewer(info.latestVersion, current)) return null;
+    for (final url in kUpdateCheckUrls) {
+      attempted++;
+      try {
+        final resp = await _client
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 12));
+        if (resp.statusCode != 200) continue;
 
-      return info;
-    } catch (_) {
-      return null;
+        final json = _parseJson(resp.body);
+        if (json == null) continue;
+
+        final info = UpdateInfo.fromJson(json);
+        if (info.apkUrl.isEmpty) continue;
+
+        succeeded++;
+
+        // Keep the highest-versioned result across mirrors.
+        if (best == null || _isNewer(info.latestVersion, best.latestVersion)) {
+          best = info;
+        }
+      } catch (_) {
+        // Try next mirror — timeouts / network errors are expected in CN.
+        continue;
+      }
     }
+
+    if (succeeded == 0) {
+      // Every mirror failed — network outage or all mirrors unreachable.
+      throw UpdateFetchException(
+        '无法连接到更新服务器（已尝试 $attempted 个镜像）');
+    }
+
+    if (best == null) return null;
+    if (!_isNewer(best.latestVersion, current)) return null;
+    return best;
   }
 
   /// Download the APK from [info.apkUrl] into the app's cache directory.
@@ -152,4 +198,15 @@ class UpdateService {
   }
 
   void dispose() => _client.close();
+}
+
+/// Thrown when [UpdateService.checkForUpdate] cannot reach any of the
+/// configured version.json mirrors (network outage, DNS failure, timeout
+/// on every URL). Distinct from `null` return (which means "all reachable
+/// mirrors report no newer version").
+class UpdateFetchException implements Exception {
+  final String message;
+  UpdateFetchException(this.message);
+  @override
+  String toString() => 'UpdateFetchException: $message';
 }

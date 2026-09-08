@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import 'update_info.dart';
@@ -135,24 +133,66 @@ class _UpdateDialogState extends State<UpdateDialog> {
   }
 }
 
-/// Check for updates and show the dialog if one is available.
-/// Called once at app startup. Failures are silent (no crash).
-Future<void> checkAndShowUpdate(BuildContext context) async {
-  try {
-    // Skip on non-Android platforms (desktop doesn't use APK install).
-    if (!Platform.isAndroid) return;
+/// Manually check for updates and show the appropriate dialog.
+/// Shows an "already up to date" message if no update is available,
+/// or the update dialog if a new version is found.
+/// Should be called from a user-triggered action (e.g. menu item).
+Future<void> manualCheckForUpdate(BuildContext context) async {
+  // Show a loading indicator
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      content: const Row(
+        children: [
+          SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 16),
+          Text('正在检查更新…'),
+        ],
+      ),
+    ),
+  );
 
-    final service = UpdateService();
-    final info = await service.checkForUpdate();
-    service.dispose();
-    if (info != null) {
-      // Use a microtask delay so the dialog isn't shown during the first
-      // frame build.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) UpdateDialog.show(context, info);
-      });
-    }
+  final service = UpdateService();
+  UpdateInfo? info;
+  bool networkError = false;
+  try {
+    info = await service.checkForUpdate();
   } catch (_) {
-    // Never let an update check break the app startup.
+    networkError = true;
   }
+  service.dispose();
+
+  if (!context.mounted) return;
+  Navigator.of(context).pop(); // Close loading dialog
+
+  if (networkError) {
+    _showMessageDialog(context, '检查失败',
+        '无法连接到更新服务器，请检查网络后重试。');
+  } else if (info != null) {
+    UpdateDialog.show(context, info);
+  } else {
+    final current = await UpdateService().currentVersion;
+    _showMessageDialog(context, '已是最新版本',
+        '当前版本 $current 已是最新版本，无需更新。');
+  }
+}
+
+void _showMessageDialog(BuildContext context, String title, String message) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('确定'),
+        ),
+      ],
+    ),
+  );
 }

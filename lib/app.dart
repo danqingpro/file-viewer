@@ -5,11 +5,14 @@ import 'core/config/app_info.dart';
 import 'core/config/app_settings.dart';
 import 'core/config/app_theme.dart';
 import 'core/editor_kernel/editor_state.dart';
-import 'core/update/update_dialog.dart';
+import 'core/update/update_dialog.dart' show manualCheckForUpdate, UpdateDialog;
 import 'editor_service.dart';
 import 'ui/about/about_page.dart';
 import 'ui/binary_viewer/binary_viewer.dart';
+import 'ui/pdf_viewer/pdf_viewer.dart';
+import 'ui/word_viewer/word_viewer.dart';
 import 'ui/editor_view/editor_view.dart';
+import 'ui/feedback/feedback_page.dart';
 import 'ui/menu/menu_bar.dart';
 import 'ui/status_bar/status_bar.dart';
 import 'ui/workspace/workspace_tree.dart';
@@ -68,15 +71,13 @@ class EditorShell extends StatefulWidget {
 class _EditorShellState extends State<EditorShell> {
   late final EditorService _service;
   late final FocusNode _focusNode;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
     _service = EditorService()..addListener(_onServiceChanged);
     _focusNode = FocusNode();
-    // Check for app updates in the background; shows a dialog if a newer
-    // version is published on GitHub. Silent on failure.
-    checkAndShowUpdate(context);
   }
 
   @override
@@ -91,11 +92,111 @@ class _EditorShellState extends State<EditorShell> {
     if (mounted) setState(() {});
   }
 
+  /// Toggle the workspace drawer. Called from the menu bar "切换工作区"
+  /// button and from the "打开文件夹作为工作区" flow (auto-open).
+  void _toggleWorkspaceDrawer() {
+    if (_service.workspacePath == null) return;
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold == null) return;
+    if (scaffold.isDrawerOpen) {
+      scaffold.closeDrawer();
+    } else {
+      scaffold.openDrawer();
+    }
+  }
+
+  /// Close the workspace drawer (called after selecting a file).
+  void _closeWorkspaceDrawer() {
+    _scaffoldKey.currentState?.closeDrawer();
+  }
+
+  Future<void> _openWorkspace() async {
+    await _service.openWorkspace();
+    // Auto-open the drawer once a workspace is selected.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_service.workspacePath != null && mounted) {
+        _scaffoldKey.currentState?.openDrawer();
+      }
+    });
+  }
+
+  /// Build the Drawer widget that contains the workspace tree.
+  /// Wraps [WorkspaceTree] in a Material Drawer so it slides in from
+  /// the left with a scrim overlay; taps outside / back button close it.
+  Widget _buildWorkspaceDrawer() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Drawer(
+      width: 300,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      child: SafeArea(
+        child: WorkspaceTree(
+          rootPath: _service.workspacePath!,
+          service: _service,
+          onClose: _service.closeWorkspace,
+          onFileOpened: _closeWorkspaceDrawer,
+        ),
+      ),
+    );
+  }
+
   void _openAbout() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AboutPage(plugins: _service.plugins.describeAll()),
       ),
+    );
+  }
+
+  /// Manually check for updates (帮助 → 检查更新).
+  void _onCheckUpdate() {
+    manualCheckForUpdate(context);
+  }
+
+  /// Show a filename input dialog and rename the active file in place.
+  void _onRename() {
+    final tab = _service.active;
+    if (tab == null || tab.path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('当前没有可重命名的文件，请先打开或保存文件')),
+      );
+      return;
+    }
+    final currentName = tab.label;
+    final ctrl = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名文件'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入新的文件名'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+          TextButton(
+            onPressed: () async {
+              final newName = ctrl.text.trim();
+              if (newName.isEmpty) return;
+              Navigator.of(ctx).pop();
+              final (ok, err) = await _service.renameActiveTo(newName);
+              if (!ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(err ?? '重命名失败')),
+                );
+              }
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Open the feedback page (帮助 → 意见反馈).
+  void _onFeedback() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FeedbackPage()),
     );
   }
 
@@ -132,10 +233,17 @@ class _EditorShellState extends State<EditorShell> {
           _RedoIntent: CallbackAction<_RedoIntent>(onInvoke: (_) => _service.redo()),
           _FormatIntent: CallbackAction<_FormatIntent>(onInvoke: (_) => _service.applyFormat()),
         },
-        child: Focus(
+          child: Focus(
           focusNode: _focusNode,
           autofocus: true,
           child: Scaffold(
+            key: _scaffoldKey,
+            // Drawer-style workspace panel. Only shown when a workspace is
+            // opened; otherwise the editor takes the full width. The user
+            // can toggle it from the toolbar / menu.
+            drawer: _service.workspacePath != null
+                ? _buildWorkspaceDrawer()
+                : null,
             // SafeArea keeps the menu bar clear of the phone status bar and
             // the bottom system gesture bar on mobile. On desktop it's a no-op.
             body: SafeArea(
@@ -143,39 +251,42 @@ class _EditorShellState extends State<EditorShell> {
               bottom: true,
               child: Column(
                 children: [
-                  EditorMenuBar(service: _service, onAbout: _openAbout, settings: widget.settings),
+                  EditorMenuBar(
+                    service: _service,
+                    onAbout: _openAbout,
+                    settings: widget.settings,
+                    onRename: _onRename,
+                    onFeedback: _onFeedback,
+                    onCheckUpdate: _onCheckUpdate,
+                    onOpenWorkspace: _openWorkspace,
+                    onToggleWorkspace: _toggleWorkspaceDrawer,
+                  ),
                   _TabStrip(service: _service),
                   const Divider(height: 1, color: Color(0xFFE0E0E0)),
                   Expanded(
-                    child: Row(
-                      children: [
-                        if (_service.workspacePath != null)
-                          WorkspaceTree(
-                            rootPath: _service.workspacePath!,
-                            service: _service,
-                            onClose: _service.closeWorkspace,
-                          ),
-                        Expanded(
-                          child: active == null
-                              ? const _EmptyState()
-                              : active.isBinary
-                                  ? BinaryViewer(
-                                      key: ValueKey(active),
-                                      tab: active,
-                                      onBytesChanged: _service.updateBinaryBytes,
-                                    )
-                                  : EditorView(
-                                      key: ValueKey(active),
-                                      tab: active,
-                                      highlightPlugin: _service.highlightPlugin,
-                                      onTextChanged: _service.onTextChanged,
-                                      onSelectionChanged: _service.onSelectionChanged,
-                                      onControllerAttached: _service.bindLiveController,
-                                      onControllerDetached: _service.unbindLiveController,
-                                    ),
-                        ),
-                      ],
-                    ),
+                    child: active == null
+                        ? const _EmptyState()
+                        : active.isPdf
+                            ? PdfViewer(key: ValueKey(active), tab: active)
+                            : active.isWord
+                                ? WordViewer(
+                                    key: ValueKey(active), tab: active)
+                                : active.isBinary
+                                    ? BinaryViewer(
+                                        key: ValueKey(active),
+                                        tab: active,
+                                        onBytesChanged:
+                                            _service.updateBinaryBytes,
+                                      )
+                                    : EditorView(
+                              key: ValueKey(active),
+                              tab: active,
+                              highlightPlugin: _service.highlightPlugin,
+                              onTextChanged: _service.onTextChanged,
+                              onSelectionChanged: _service.onSelectionChanged,
+                              onControllerAttached: _service.bindLiveController,
+                              onControllerDetached: _service.unbindLiveController,
+                            ),
                   ),
                   if (active != null)
                     StatusBar(

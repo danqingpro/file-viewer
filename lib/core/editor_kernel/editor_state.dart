@@ -40,6 +40,28 @@ class EditorTabController extends ChangeNotifier {
   Uint8List? get bytes => _bytes;
   bool get isBinary => _bytes != null;
 
+  /// Whether this tab holds a PDF file (based on path extension). PDF tabs
+  /// are stored as binary bytes but rendered by the dedicated PdfViewer.
+  bool get isPdf {
+    final p = _path;
+    if (p == null) return false;
+    final dot = p.lastIndexOf('.');
+    if (dot == -1 || dot == p.length - 1) return false;
+    return p.substring(dot + 1).toLowerCase() == 'pdf';
+  }
+
+  /// Whether this tab holds a Word document (`.doc` / `.docx`). Word tabs
+  /// are stored as binary bytes and rendered by the dedicated WordViewer,
+  /// which hands the temp file to the system document viewer (read-only).
+  bool get isWord {
+    final p = _path;
+    if (p == null) return false;
+    final dot = p.lastIndexOf('.');
+    if (dot == -1 || dot == p.length - 1) return false;
+    final ext = p.substring(dot + 1).toLowerCase();
+    return ext == 'doc' || ext == 'docx';
+  }
+
   set text(String value) {
     if (value == _text) return;
     _pushUndo();

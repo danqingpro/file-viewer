@@ -4,20 +4,26 @@ import 'package:flutter/material.dart';
 
 import '../../editor_service.dart';
 
-/// A collapsible folder tree panel, shown when the user opens a workspace
-/// (文件 → 打开文件夹作为工作区). Folders are collapsed by default and
-/// expand when tapped. Files open in a new tab on tap.
+/// A collapsible folder tree panel, used inside the workspace drawer.
+/// Folders are collapsed by default and expand when tapped. Files open
+/// in a new tab on tap, and the caller is notified via [onFileOpened]
+/// so it can close the drawer after a selection.
 class WorkspaceTree extends StatefulWidget {
   const WorkspaceTree({
     super.key,
     required this.rootPath,
     required this.service,
     required this.onClose,
+    this.onFileOpened,
   });
 
   final String rootPath;
   final EditorService service;
   final VoidCallback onClose;
+
+  /// Called after a file tile is tapped (right before the file opens).
+  /// The drawer uses this to close itself on selection.
+  final VoidCallback? onFileOpened;
 
   @override
   State<WorkspaceTree> createState() => _WorkspaceTreeState();
@@ -30,34 +36,33 @@ class _WorkspaceTreeState extends State<WorkspaceTree> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF252526) : const Color(0xFFF3F3F3);
+    final bg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final fg = isDark ? Colors.white70 : Colors.black87;
 
     return Container(
-      width: 260,
       color: bg,
       child: Column(
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: isDark ? const Color(0xFF333) : const Color(0xFFE0E0E0))),
             ),
             child: Row(
               children: [
-                const Icon(Icons.folder_outlined, size: 14, color: Color(0xFF007ACC)),
-                const SizedBox(width: 6),
+                const Icon(Icons.folder_outlined, size: 16, color: Color(0xFF007ACC)),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _baseName(widget.rootPath),
-                    style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+                    style: TextStyle(fontSize: 13, color: fg, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 InkWell(
                   onTap: widget.onClose,
-                  child: Icon(Icons.close, size: 14, color: isDark ? Colors.white54 : Colors.black45),
+                  child: Icon(Icons.close, size: 16, color: isDark ? Colors.white54 : Colors.black45),
                 ),
               ],
             ),
@@ -149,7 +154,10 @@ class _WorkspaceTreeState extends State<WorkspaceTree> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = isDark ? Colors.white60 : Colors.black54;
     return InkWell(
-      onTap: () => widget.service.openRecentFile(path),
+      onTap: () {
+        widget.service.openRecentFile(path);
+        widget.onFileOpened?.call();
+      },
       child: Padding(
         padding: EdgeInsets.only(left: 8.0 + depth * 12, top: 2, bottom: 2, right: 8),
         child: Row(

@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.1",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.1/file-viewer-1.10.1.apk",
-  "changelog": "1.10.1：修复更新检测 bug——CDN 返回旧版本时误报已是最新版本；遍历所有 mirror 取最高版本；mirror 顺序优化为 fastly → raw → jsdelivr",
+  "latestVersion": "1.10.3",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.3/file-viewer-1.10.3.apk",
+  "changelog": "1.10.3：新增 Word 文档预览插件（.doc/.docx 系统查看器只读）；修复更新检测——所有镜像不可达时静默返回 null 导致误报已是最新版本；checkForUpdate 新增 succeeded 计数器，所有镜像均失败时抛出 UpdateFetchException",
   "forceUpdate": false
 }

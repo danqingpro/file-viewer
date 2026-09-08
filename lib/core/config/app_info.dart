@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.7.0';
+  static const String version = '1.10.3';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.7.0';
+  static const String versionNumber = '1.10.3';
 
   /// Internal build number.
-  static const int buildNumber = 9;
+  static const int buildNumber = 15;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -41,6 +41,7 @@ class AppInfo {
     '保存逻辑：首次保存需选择路径，再次保存直接写入原路径',
     '多格式语法高亮：txt / md / cpp / h / hpp / json / xml / html / css / js / py / yaml / bat',
     '二进制文件查看：.bin / .bit / .raw / .dat 十六进制查看与编辑',
+    'Word 文档预览：.doc / .docx 调用系统查看器渲染（只读）',
     '代码格式化：JSON / XML / C++ 基础排版',
     '跨平台语音播报：选中文本或全文播报，暂停 / 继续 / 停止',
     '行号显示、光标行列、文件大小、修改状态底部状态栏',
@@ -60,6 +61,8 @@ class AppInfo {
     'JSON / XML / C++ 格式化插件 (format_plugin)',
     '跨平台语音播报插件 (voice_plugin)',
     '二进制查看插件 (binary_viewer_plugin)',
+    'PDF 预览插件 (pdf_viewer_plugin)',
+    'Word 文档预览插件 (word_viewer_plugin)',
     '文件编码自动适配插件 (encoding adapter, 内置于 file_kernel)',
   ];
 
@@ -70,6 +73,83 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.3',
+      date: '2026-09-08',
+      title: '修复：更新检测在所有镜像不可达时静默误报"已是最新版本"',
+      changes: [
+        '修复：checkForUpdate 在所有镜像均不可达（网络异常 / 超时 / DNS 失败）时仍然返回 null',
+        '原因：null 返回值与"所有可达镜像均显示无更新"的正常返回值相同，调用方无法区分',
+        '修复：checkForUpdate 新增 succeeded 计数器，所有镜像均失败时抛出 UpdateFetchException',
+        '修复：manualCheckForUpdate 的 catch 分支现在能捕获该异常并正确显示"检查失败"提示',
+        '验证：遍历镜像取最高版本逻辑保留不变，仅新增异常区分语义',
+        '版本号升级至 1.10.3',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.10.2',
+      date: '2026-09-08',
+      title: 'Word 文档预览插件',
+      changes: [
+        '新增：Word 文档预览插件，打开 .doc / .docx 文件时调用系统查看器渲染（只读）',
+        '新增：支持所有 Word 文档格式（.doc 旧二进制格式 + .docx 新 XML 格式），由系统文档应用原生渲染',
+        '新增：EditorTabController.isWord 判断 + WordViewer 组件 + word_viewer_plugin 插件注册',
+        '设计：Word 文档以二进制字节读入临时文件（保留原扩展名），交由系统查看器打开，无需新增第三方依赖',
+        '版本号升级至 1.10.2',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.10.1',
+      date: '2026-09-08',
+      title: '修复更新检测：stale CDN 缓存导致误报"已是最新版本"',
+      changes: [
+        '修复：更新检测在 CDN 返回旧版本（jsDelivr 缓存数天未刷新）时直接判定"已是最新版本"',
+        '修复：mirror URL 排序错误，fastly（更稳定、缓存更短）未排在第一位',
+        '改进：更新检测改为遍历所有 mirror 并取最高版本，不再"first-success wins"',
+        '改进：三个 mirror 位置——fastly → raw.githubusercontent → cdn.jsdelivr（仅作最后兜底）',
+        '版本号升级至 1.10.1',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.10.0',
+      date: '2026-09-08',
+      title: '工作区抽屉式面板',
+      changes: [
+        '新增：工作区改为 Drawer 抽屉式面板，不再常驻占用编辑区空间',
+        '新增：打开工作区后抽屉自动展开，工具栏/视图菜单可随时折叠和展开',
+        '新增：抽屉支持边缘滑动唤出、点击遮罩关闭、返回键关闭',
+        '新增：在工作区中选择文件后自动关闭抽屉，聚焦到编辑区',
+        '改进：编辑区始终保持全宽显示，抽屉关闭后用户可完整查看文件数据',
+        '版本号升级至 1.10.0',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.9.0',
+      date: '2026-09-08',
+      title: '手动检查更新 + 重命名修复',
+      changes: [
+        '新增：帮助 → 检查更新，手动检查是否有新版本',
+        '新增：检查结果弹窗（发现新版本 / 已是最新版本 / 检查失败）',
+        '改进：取消启动时自动检查更新，改为用户主动触发',
+        '改进：更新检查使用多个镜像源（raw.githubusercontent + jsDelivr），提高国内可达性',
+        '修复：文件重命名在 Android 上不可用，新增 SAF 回退方案（saveFile + 删除旧文件）',
+        '修复：重命名失败时错误提示不显示（SnackBars 上下文丢失）',
+        '版本号升级至 1.9.0',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.8.0',
+      date: '2026-09-08',
+      title: 'PDF 预览 + 意见反馈 + 重命名与工作区修复',
+      changes: [
+        '新增：PDF 预览插件，打开 .pdf 文件时直接渲染预览（支持翻页）',
+        '新增：意见反馈功能（帮助 → 意见反馈），支持文字描述与图片/视频/压缩包附件',
+        '新增：反馈自动推送到 GitHub 仓库 Issue，附件上传到仓库 feedback 目录',
+        '修复：文件重命名功能失效，改为原地重命名（File.rename）并弹出文件名输入框',
+        '修复：打开工作区后文件夹下的文件无法打开，补充 Android 存储权限（MANAGE_EXTERNAL_STORAGE）',
+        '版本号升级至 1.8.0',
+      ],
+    ),
     VersionChangeLog(
       version: '1.7.0',
       date: '2026-09-07',

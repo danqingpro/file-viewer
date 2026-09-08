@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'core/config/app_info.dart';
 import 'core/editor_kernel/editor_state.dart';
@@ -13,6 +14,8 @@ import 'core/file_kernel/file_kernel.dart';
 import 'core/plugin_manager/event_bus.dart';
 import 'core/plugin_manager/plugin_manager.dart';
 import 'plugins/binary_viewer_plugin/binary_viewer_plugin.dart';
+import 'plugins/pdf_viewer_plugin/pdf_viewer_plugin.dart';
+import 'plugins/word_viewer_plugin/word_viewer_plugin.dart';
 import 'plugins/file_type_plugin/file_type_plugin.dart';
 import 'plugins/format_plugin/format_plugin.dart';
 import 'plugins/highlight_plugin/highlight_plugin.dart';
@@ -32,12 +35,16 @@ class EditorService extends ChangeNotifier {
     _plugins.register(FormatPlugin());
     _plugins.register(VoicePlugin());
     _plugins.register(BinaryViewerPlugin());
+    _plugins.register(PdfViewerPlugin());
+    _plugins.register(WordViewerPlugin());
     _fileKernel = FileKernel(_bus);
     _fileType = _plugins.get<FileTypePlugin>('file_type_plugin')!;
     _highlight = _plugins.get<HighlightPlugin>('highlight_plugin')!;
     _format = _plugins.get<FormatPlugin>('format_plugin')!;
     _voice = _plugins.get<VoicePlugin>('voice_plugin')!;
     _binary = _plugins.get<BinaryViewerPlugin>('binary_viewer_plugin')!;
+    _pdf = _plugins.get<PdfViewerPlugin>('pdf_viewer_plugin')!;
+    _word = _plugins.get<WordViewerPlugin>('word_viewer_plugin')!;
     newTab();
   }
 
@@ -49,6 +56,8 @@ class EditorService extends ChangeNotifier {
   late final FormatPlugin _format;
   late final VoicePlugin _voice;
   late final BinaryViewerPlugin _binary;
+  late final PdfViewerPlugin _pdf;
+  late final WordViewerPlugin _word;
 
   final List<EditorTabController> _tabs = [];
   int _active = 0;
@@ -235,7 +244,11 @@ class EditorService extends ChangeNotifier {
     return i == -1 ? 'txt' : path.substring(i + 1).toLowerCase();
   }
 
-  String fileTypeLabelFor(EditorTabController tab) => _fileType.labelFor(tab.language);
+  String fileTypeLabelFor(EditorTabController tab) {
+    if (tab.isPdf) return 'PDF 文档';
+    if (tab.isWord) return 'Word 文档';
+    return _fileType.labelFor(tab.language);
+  }
 
   /// Reload the active tab's content from disk, discarding any unsaved
   /// edits. Mirrors Notepad++'s "文件 → 重新读取文件".
@@ -336,34 +349,81 @@ class EditorService extends ChangeNotifier {
     return true;
   }
 
-  /// Rename the active file: pick a new path, write content, delete the
-  /// old file, and re-point the tab. Mirrors Notepad++'s "文件 → 重命名".
-  Future<bool> renameActive() async {
+  /// Rename the active file in place (same directory, new filename).
+  /// Mirrors Notepad++'s "文件 → 重命名".
+  ///
+  /// On Android, `File.rename` only works for files inside the app's
+  /// private directories. For files in shared storage (opened via the
+  /// system file picker or workspace), we fall back to a "save as +
+  /// delete old" approach using FilePicker.saveFile (SAF).
+  ///
+  /// Returns a record of (success, errorMessage).
+  Future<(bool, String?)> renameActiveTo(String newName) async {
     final tab = active;
-    if (tab == null || tab.path == null) return false;
-    final Uint8List bytes = tab.isBinary
-        ? (tab.bytes ?? Uint8List(0))
-        : _fileKernel.encode(tab.text, encodingLabel: tab.encoding);
-    final outPath = await FilePicker.platform.saveFile(
-      dialogTitle: '重命名文件',
-      fileName: tab.label,
-      type: FileType.any,
-      bytes: bytes,
-    );
-    if (outPath == null || outPath.isEmpty || outPath == tab.path) return false;
-    // The native SAF handler already wrote the bytes to outPath.
-    // Remove the old file from disk and the recent list.
-    try {
-      await File(tab.path!).delete();
-    } catch (_) {}
-    _recentFiles.remove(tab.path);
-    tab.markSaved(path: outPath, encoding: tab.encoding);
-    if (!tab.isBinary) {
-      tab._setLanguage(_fileType.detect(outPath));
+    if (tab == null || tab.path == null) return (false, '没有可重命名的文件');
+    final oldPath = tab.path!;
+
+    // Reject content URIs (SAF) — can't be renamed directly.
+    if (oldPath.startsWith('content://')) {
+      return (false, '此文件通过系统文件选择器打开，不支持原地重命名，请使用「另存为」');
     }
-    _trackRecent(outPath);
-    notifyListeners();
-    return true;
+
+    final dir = oldPath.substring(0, oldPath.lastIndexOf(RegExp(r'[/\\]')) + 1);
+    final newPath = '$dir$newName';
+    if (newPath == oldPath) return (true, null);
+
+    // Try direct rename first (works for workspace files with permission,
+    // and for files in the app's cache directory).
+    try {
+      await File(oldPath).rename(newPath);
+      _recentFiles.remove(oldPath);
+      tab.markSaved(path: newPath, encoding: tab.encoding);
+      if (!tab.isBinary) {
+        tab._setLanguage(_fileType.detect(newPath));
+      }
+      _trackRecent(newPath);
+      notifyListeners();
+      return (true, null);
+    } catch (_) {
+      // Direct rename failed (likely Android scoped storage).
+      // Fall back to "save as + delete old" via SAF.
+    }
+
+    // Fallback: use FilePicker.saveFile with the file's bytes, then
+    // try to delete the old file.
+    try {
+      final Uint8List bytes = tab.isBinary
+          ? (tab.bytes ?? Uint8List(0))
+          : _fileKernel.encode(tab.text, encodingLabel: tab.encoding);
+
+      final outPath = await FilePicker.platform.saveFile(
+        dialogTitle: '重命名（选择保存位置）',
+        fileName: newName,
+        type: FileType.any,
+        bytes: bytes,
+      );
+      if (outPath == null || outPath.isEmpty) {
+        return (false, '重命名已取消');
+      }
+
+      // Try to delete the old file (may fail on scoped storage; that's OK).
+      try {
+        await File(oldPath).delete();
+      } catch (_) {
+        // Old file might remain; not a failure for the rename itself.
+      }
+
+      _recentFiles.remove(oldPath);
+      tab.markSaved(path: outPath, encoding: tab.encoding);
+      if (!tab.isBinary) {
+        tab._setLanguage(_fileType.detect(outPath));
+      }
+      _trackRecent(outPath);
+      notifyListeners();
+      return (true, null);
+    } catch (e) {
+      return (false, '重命名失败：$e');
+    }
   }
 
   /// Close every open tab. Mirrors Notepad++'s "全部关闭".
@@ -434,8 +494,23 @@ class EditorService extends ChangeNotifier {
 
   Future<void> _openPath(String path) async {
     try {
+      final isPdf = _pdf.isPdf(path);
+      final isWord = _word.isWord(path);
       final isBin = _binary.isBinary(path);
-      if (isBin) {
+      if (isPdf) {
+        // PDF: read raw bytes and bind as a binary tab; the UI detects the
+        // .pdf extension and renders the PdfViewer widget.
+        final bytes = await _fileKernel.readBytes(path);
+        final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
+        _tabs.add(tab);
+      } else if (isWord) {
+        // Word: read raw bytes and bind as a binary tab; the UI detects the
+        // .doc/.docx extension and renders the WordViewer widget, which
+        // hands the temp file to the system document viewer (read-only).
+        final bytes = await _fileKernel.readBytes(path);
+        final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
+        _tabs.add(tab);
+      } else if (isBin) {
         // Binary file: read raw bytes and bind to the hex viewer.
         final bytes = await _fileKernel.readBytes(path);
         final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
@@ -478,7 +553,12 @@ class EditorService extends ChangeNotifier {
 
   /// Open a folder as a workspace. The folder tree is shown in a side panel.
   /// Mirrors Notepad++'s "文件 → 打开文件夹作为工作区".
+  ///
+  /// On Android, requests storage permission first (all-files access on
+  /// Android 11+). Without it, `Directory.listSync` and `File.readAsBytes`
+  /// fail silently, which is why workspace files appeared unopenable.
   Future<bool> openWorkspace() async {
+    await _ensureStoragePermission();
     final dir = await FilePicker.platform.getDirectoryPath(
       dialogTitle: '选择工作区文件夹',
     );
@@ -486,6 +566,26 @@ class EditorService extends ChangeNotifier {
     _workspacePath = dir;
     notifyListeners();
     return true;
+  }
+
+  /// Request the storage permission needed to browse / read workspace files.
+  /// On Android 11+ this means "all files access", which requires sending
+  /// the user to system settings. On older Android versions a normal
+  /// runtime permission dialog is enough.
+  Future<void> _ensureStoragePermission() async {
+    if (!Platform.isAndroid) return;
+    try {
+      if (await Permission.manageExternalStorage.isGranted) return;
+      // Try to request; on Android 11+ this opens the system settings page
+      // where the user toggles "允许管理所有文件".
+      final status = await Permission.manageExternalStorage.request();
+      if (!status.isGranted) {
+        // Fallback for older Android: request legacy read permission.
+        await Permission.storage.request();
+      }
+    } catch (_) {
+      // Permission API failures must not block the workspace picker.
+    }
   }
 
   /// Close the workspace panel.

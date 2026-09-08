@@ -21,11 +21,34 @@ class EditorMenuBar extends StatelessWidget {
     required this.service,
     required this.onAbout,
     required this.settings,
+    this.onRename,
+    this.onFeedback,
+    this.onCheckUpdate,
+    this.onOpenWorkspace,
+    this.onToggleWorkspace,
   });
 
   final EditorService service;
   final VoidCallback onAbout;
   final AppSettings settings;
+
+  /// Triggered by "文件 → 重命名…". The UI layer is responsible for showing
+  /// a filename input dialog and then calling [EditorService.renameActiveTo].
+  final VoidCallback? onRename;
+
+  /// Triggered by "帮助 → 意见反馈".
+  final VoidCallback? onFeedback;
+
+  /// Triggered by "帮助 → 检查更新".
+  final VoidCallback? onCheckUpdate;
+
+  /// Triggered by "文件 → 打开文件夹作为工作区…". Wraps
+  /// [EditorService.openWorkspace] so the shell can auto-open the drawer.
+  final VoidCallback? onOpenWorkspace;
+
+  /// Triggered by the toolbar "切换工作区" button — opens or closes
+  /// the workspace drawer. No-op when no workspace is loaded.
+  final VoidCallback? onToggleWorkspace;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +122,17 @@ class EditorMenuBar extends StatelessWidget {
                   children: [
                     _toolButton(context, Icons.note_add_outlined, '新建', service.newTab, mode, isMobile),
                     _toolButton(context, Icons.folder_open_outlined, '打开', service.openFiles, mode, isMobile),
+                    // Workspace toggle button — only visible when a workspace is loaded.
+                    if (service.workspacePath != null) ...[
+                      _toolButton(
+                        context,
+                        Icons.folder_shared_outlined,
+                        '工作区',
+                        onToggleWorkspace ?? () {},
+                        mode,
+                        isMobile,
+                      ),
+                    ],
                     _toolButton(context, Icons.save_outlined, '保存', service.saveActive, mode, isMobile),
                     _toolButton(context, Icons.save_alt_outlined, '另存为', service.saveActiveAs, mode, isMobile),
                     _divider(isDark, isMobile),
@@ -128,14 +162,15 @@ class EditorMenuBar extends StatelessWidget {
     return [
       _item('新建文件', Icons.note_add_outlined, service.newTab, shortcut: 'Ctrl+N'),
       _item('打开文件…', Icons.folder_open_outlined, service.openFiles, shortcut: 'Ctrl+O'),
-      _item('打开文件夹作为工作区…', Icons.folder_shared_outlined, service.openWorkspace),
+      _item('打开文件夹作为工作区…', Icons.folder_shared_outlined,
+          onOpenWorkspace ?? service.openWorkspace),
       const PopupMenuDivider(),
       _item('重新读取文件', Icons.refresh_outlined, service.reloadActive, shortcut: 'Ctrl+R'),
       _item('保存', Icons.save_outlined, service.saveActive, shortcut: 'Ctrl+S'),
       _item('另存为…', Icons.save_alt_outlined, service.saveActiveAs, shortcut: 'Ctrl+Shift+S'),
       _item('拷贝另存为…', Icons.content_copy_outlined, service.saveActiveCopy),
       _item('全部保存', Icons.save_alt_outlined, service.saveAll, shortcut: 'Ctrl+Shift+L'),
-      _item('重命名…', Icons.drive_file_rename_outline, service.renameActive, shortcut: 'Ctrl+Shift+S'),
+      _item('重命名…', Icons.drive_file_rename_outline, onRename ?? () {}, shortcut: 'Ctrl+Shift+S'),
       const PopupMenuDivider(),
       _item('关闭标签页', Icons.close_outlined, () => service.closeTab(service.activeIndex), shortcut: 'Ctrl+W'),
       _item('全部关闭', Icons.close_fullscreen_outlined, service.closeAllTabs, shortcut: 'Ctrl+Shift+W'),
@@ -175,7 +210,14 @@ class EditorMenuBar extends StatelessWidget {
       ];
 
   List<PopupMenuEntry<Object>> _viewItems() {
+    final hasWorkspace = service.workspacePath != null;
     return [
+      // Workspace drawer toggle (only when a workspace is loaded).
+      if (hasWorkspace) ...[
+        _item('切换工作区面板', Icons.folder_shared_outlined,
+            onToggleWorkspace ?? () {}),
+        const PopupMenuDivider(),
+      ],
       const PopupMenuDivider(),
       _sectionHeader('主题'),
       _checkItem('浅色', Icons.light_mode_outlined, settings.themeMode == ThemeMode.light,
@@ -229,6 +271,9 @@ class EditorMenuBar extends StatelessWidget {
       ];
 
   List<PopupMenuEntry<Object>> _helpItems() => [
+        _item('检查更新', Icons.system_update_alt_outlined, onCheckUpdate ?? () {}),
+        _item('意见反馈', Icons.feedback_outlined, onFeedback ?? () {}),
+        const PopupMenuDivider(),
         _item('关于 ${AppInfo.name}', Icons.info_outline, onAbout),
       ];
 
