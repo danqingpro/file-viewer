@@ -118,24 +118,71 @@ class UpdateService {
   /// Download the APK from [info.apkUrl] into the app's cache directory.
   /// Emits progress (0.0 .. 1.0) through [onProgress].
   /// Returns the local file path on success, or `null` on failure.
+  ///
+  /// Supports **resume** (断点续传): if a partially-downloaded file from
+  /// a previous attempt already exists in the cache, it sends an HTTP
+  /// `Range` header to continue from the last received byte instead of
+  /// starting over. If the server does not honour the Range header
+  /// (returns 200 instead of 206), the partial file is discarded and a
+  /// fresh full download starts.
   Future<String?> downloadApk(
     UpdateInfo info, {
     required ValueChanged<double> onProgress,
   }) async {
     try {
-      final request = http.Request('GET', Uri.parse(info.apkUrl));
-      final response = await _client.send(request).timeout(
-            const Duration(minutes: 5),
-          );
-      if (response.statusCode != 200) return null;
-
-      final total = response.contentLength ?? 0;
       final dir = await getTemporaryDirectory();
       final fileName = 'update_${info.latestVersion}.apk';
       final file = File('${dir.path}/$fileName');
 
-      int received = 0;
-      final sink = file.openWrite();
+      // Existing partial download size — basis for the Range request.
+      int start = file.existsSync() ? await file.length() : 0;
+
+      final request = http.Request('GET', Uri.parse(info.apkUrl));
+      if (start > 0) {
+        request.headers['Range'] = 'bytes=$start-';
+      }
+
+      final response = await _client.send(request).timeout(
+            const Duration(minutes: 10),
+          );
+
+      // Server honours Range: continues from `start`.
+      // Server ignores Range (200): restart from scratch.
+      final bool resumed =
+          response.statusCode == 206;
+      if (response.statusCode == 200) {
+        // Server ignored the Range header — delete any partial file and
+        // write from the beginning.
+        if (await file.exists()) await file.delete();
+        start = 0;
+      } else if (response.statusCode != 206) {
+        // Unexpected status (e.g. 416 Range Not Satisfiable if the file
+        // is already the full size, or 404).
+        return null;
+      }
+
+      // Total file size. For a 206 response the server returns
+      // `Content-Range: bytes start-end/total`; for 200 it returns
+      // `Content-Length`.
+      int? expectedTotal;
+      final contentRange = response.headers['content-range'];
+      if (contentRange != null) {
+        // e.g. "bytes 1024-2047/4096"
+        final slash = contentRange.lastIndexOf('/');
+        if (slash != -1 && slash < contentRange.length - 1) {
+          final totalStr = contentRange.substring(slash + 1);
+          expectedTotal = int.tryParse(totalStr);
+        }
+      }
+      final total = expectedTotal ?? response.contentLength ?? 0;
+
+      // Append mode for resumed downloads, write mode for fresh.
+      final sink = file.openWrite(mode: resumed ? FileMode.append : FileMode.write);
+      int received = start;
+      if (total > 0) {
+        onProgress(received / total);
+      }
+
       await response.stream.forEach((chunk) {
         sink.add(chunk);
         received += chunk.length;

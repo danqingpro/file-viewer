@@ -110,6 +110,62 @@ class _EditorShellState extends State<EditorShell> {
     _scaffoldKey.currentState?.closeDrawer();
   }
 
+  /// Close a tab, prompting to save if it has unsaved changes.
+  ///
+  /// Mirrors most editors' behaviour: a dirty tab shows a dialog with
+  /// 保存 / 不保存 / 取消. Only [EditorTabController.dirty] text/binary
+  /// tabs trigger the prompt (PDF / Word tabs are read-only and always
+  /// close directly).
+  Future<void> _closeTabWithConfirm(int index) async {
+    if (index < 0 || index >= _service.tabs.length) return;
+    final tab = _service.tabs[index];
+    if (!_service.tabNeedsSaveConfirmation(index)) {
+      _service.closeTab(index);
+      return;
+    }
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('保存文件？'),
+        content: Text('文件「${tab.label}」尚未保存，是否保存修改？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('discard'),
+            child: const Text('不保存'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('save'),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    if (result == 'cancel') return;
+    if (result == 'save') {
+      // Re-index because other tabs may have changed state; use the same
+      // label matching to find the tab we want to save.
+      final idx = _service.tabs.indexOf(tab);
+      if (idx == -1) return;
+      if (idx != _service.activeIndex) {
+        _service.switchTab(idx);
+      }
+      final saved = await _service.saveActive();
+      if (!saved) return; // save failed or cancelled; do not close
+    }
+    // Find the index again (the tab list may have shifted after save).
+    final idx = _service.tabs.indexOf(tab);
+    if (idx == -1) return;
+    _service.closeTab(idx);
+  }
+
   Future<void> _openWorkspace() async {
     await _service.openWorkspace();
     // Auto-open the drawer once a workspace is selected.
@@ -225,7 +281,7 @@ class _EditorShellState extends State<EditorShell> {
           _SaveAsIntent: CallbackAction<_SaveAsIntent>(onInvoke: (_) => _service.saveActiveAs()),
           _ReloadIntent: CallbackAction<_ReloadIntent>(onInvoke: (_) => _service.reloadActive()),
           _CloseTabIntent: CallbackAction<_CloseTabIntent>(
-              onInvoke: (_) => _service.closeTab(_service.activeIndex)),
+              onInvoke: (_) => _closeTabWithConfirm(_service.activeIndex)),
           _CloseAllIntent: CallbackAction<_CloseAllIntent>(onInvoke: (_) => _service.closeAllTabs()),
           _RestoreClosedIntent:
               CallbackAction<_RestoreClosedIntent>(onInvoke: (_) => _service.restoreLastClosed()),
@@ -260,8 +316,9 @@ class _EditorShellState extends State<EditorShell> {
                     onCheckUpdate: _onCheckUpdate,
                     onOpenWorkspace: _openWorkspace,
                     onToggleWorkspace: _toggleWorkspaceDrawer,
+                    onCloseTab: () => _closeTabWithConfirm(_service.activeIndex),
                   ),
-                  _TabStrip(service: _service),
+                  _TabStrip(service: _service, onCloseTab: _closeTabWithConfirm),
                   const Divider(height: 1, color: Color(0xFFE0E0E0)),
                   Expanded(
                     child: active == null
@@ -318,8 +375,9 @@ class _EditorShellState extends State<EditorShell> {
 
 /// Horizontal scrollable tab strip with close buttons, mirroring Notepad++.
 class _TabStrip extends StatelessWidget {
-  const _TabStrip({required this.service});
+  const _TabStrip({required this.service, required this.onCloseTab});
   final EditorService service;
+  final void Function(int index) onCloseTab;
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +402,7 @@ class _TabStrip extends StatelessWidget {
                 dirty: tab.dirty,
                 isDark: isDark,
                 onTap: () => service.switchTab(i),
-                onClose: () => service.closeTab(i),
+                onClose: () => onCloseTab(i),
               );
             },
           ),

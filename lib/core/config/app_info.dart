@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.4';
+  static const String version = '1.10.5';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.4';
+  static const String versionNumber = '1.10.5';
 
   /// Internal build number.
-  static const int buildNumber = 16;
+  static const int buildNumber = 17;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -73,6 +73,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.5',
+      date: '2026-09-08',
+      title: '更新下载断电续传 + 关闭未保存文件提示',
+      changes: [
+        '新增：APK 下载支持断点续传（HTTP Range），中断后重新下载从上次中断处继续',
+        '新增：关闭标签页时，若文件未保存弹出"保存 / 不保存 / 取消"确认对话框',
+        '改进：关闭标签页的 Ctrl+W 快捷键、标签页 X 按钮、菜单栏均走统一确认流程',
+        '版本号升级至 1.10.5',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.4',
       date: '2026-09-08',

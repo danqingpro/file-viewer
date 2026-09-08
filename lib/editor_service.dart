@@ -133,6 +133,14 @@ class EditorService extends ChangeNotifier {
     _bus.emit(AppEvents.tabClosed, {'index': index});
   }
 
+  /// Returns true if the tab at [index] has unsaved changes and the user
+  /// should be asked whether to save before closing. Used by the UI to
+  /// show a confirmation dialog before calling [closeTab].
+  bool tabNeedsSaveConfirmation(int index) {
+    if (index < 0 || index >= _tabs.length) return false;
+    return _tabs[index].dirty;
+  }
+
   /// Push a path onto the recent-files list (newest first), dropping
   /// duplicates and capping at [_maxRecent].
   void _trackRecent(String path) {

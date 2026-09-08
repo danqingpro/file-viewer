@@ -26,6 +26,7 @@ class EditorMenuBar extends StatelessWidget {
     this.onCheckUpdate,
     this.onOpenWorkspace,
     this.onToggleWorkspace,
+    this.onCloseTab,
   });
 
   final EditorService service;
@@ -45,6 +46,10 @@ class EditorMenuBar extends StatelessWidget {
   /// Triggered by "文件 → 打开文件夹作为工作区…". Wraps
   /// [EditorService.openWorkspace] so the shell can auto-open the drawer.
   final VoidCallback? onOpenWorkspace;
+
+  /// Triggered by "文件 → 关闭标签页". The UI layer handles the "unsaved
+  /// changes" confirmation dialog before calling [EditorService.closeTab].
+  final VoidCallback? onCloseTab;
 
   /// Triggered by the toolbar "切换工作区" button — opens or closes
   /// the workspace drawer. No-op when no workspace is loaded.
@@ -172,7 +177,9 @@ class EditorMenuBar extends StatelessWidget {
       _item('全部保存', Icons.save_alt_outlined, service.saveAll, shortcut: 'Ctrl+Shift+L'),
       _item('重命名…', Icons.drive_file_rename_outline, onRename ?? () {}, shortcut: 'Ctrl+Shift+S'),
       const PopupMenuDivider(),
-      _item('关闭标签页', Icons.close_outlined, () => service.closeTab(service.activeIndex), shortcut: 'Ctrl+W'),
+      _item('关闭标签页', Icons.close_outlined,
+          onCloseTab ?? () => service.closeTab(service.activeIndex),
+          shortcut: 'Ctrl+W'),
       _item('全部关闭', Icons.close_fullscreen_outlined, service.closeAllTabs, shortcut: 'Ctrl+Shift+W'),
       _item('从磁盘删除', Icons.delete_outline, service.deleteActiveFromDisk),
       const PopupMenuDivider(),
