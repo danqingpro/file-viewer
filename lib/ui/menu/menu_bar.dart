@@ -62,9 +62,13 @@ class EditorMenuBar extends StatelessWidget {
     final border = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFE0E0E0);
     // Phones have a short screen; shrink the menu bar so every button is
     // reachable by thumb. Desktop keeps the roomier VS Code sizing.
-    final isMobile = MediaQuery.of(context).size.shortestSide < 600;
-    final menuHeight = isMobile ? 26.0 : 30.0;
-    final menuFontSize = isMobile ? 12.0 : 13.0;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.shortestSide < 600;
+    // Landscape phones have very little vertical room: compress the menu
+    // strip and the quick toolbar so the editor keeps usable height.
+    final isLandscapePhone = isMobile && size.width > size.height;
+    final menuHeight = isLandscapePhone ? 22.0 : (isMobile ? 26.0 : 30.0);
+    final menuFontSize = isLandscapePhone ? 11.0 : (isMobile ? 12.0 : 13.0);
 
     return Material(
       color: surface,
@@ -116,9 +120,12 @@ class EditorMenuBar extends StatelessWidget {
             builder: (context, _) {
               final mode = settings.toolbarMode;
               // On phones the icon+text row is too tall to reach; compress it.
-              final rowHeight = isMobile
-                  ? (mode == ToolbarDisplayMode.iconAndText ? 44.0 : 32.0)
-                  : (mode == ToolbarDisplayMode.iconAndText ? 56.0 : 36.0);
+              // Landscape phones compress further (see isLandscapePhone above).
+              final rowHeight = isLandscapePhone
+                  ? (mode == ToolbarDisplayMode.iconAndText ? 36.0 : 26.0)
+                  : isMobile
+                      ? (mode == ToolbarDisplayMode.iconAndText ? 44.0 : 32.0)
+                      : (mode == ToolbarDisplayMode.iconAndText ? 56.0 : 36.0);
               return SizedBox(
                 height: rowHeight,
                 child: ListView(
@@ -146,6 +153,19 @@ class EditorMenuBar extends StatelessWidget {
                     _divider(isDark, isMobile),
                     _toolButton(context, Icons.format_align_left_outlined, '格式化', service.applyFormat, mode, isMobile),
                     _toolButton(context, Icons.record_voice_over_outlined, '语音播报', service.speakSelected, mode, isMobile),
+                    // Markdown / Mermaid live-preview toggle — only shown for
+                    // tabs that support rendering.
+                    if (service.active?.supportsPreview ?? false)
+                      _toolButton(
+                        context,
+                        (service.active?.previewEnabled ?? false)
+                            ? Icons.edit_note_outlined
+                            : Icons.preview_outlined,
+                        (service.active?.previewEnabled ?? false) ? '编辑' : '预览',
+                        service.togglePreview,
+                        mode,
+                        isMobile,
+                      ),
                     _divider(isDark, isMobile),
                     _themeButton(context, mode, isMobile),
                     _toolButton(context, Icons.info_outline, '关于', onAbout, mode, isMobile),
@@ -225,6 +245,14 @@ class EditorMenuBar extends StatelessWidget {
             onToggleWorkspace ?? () {}),
         const PopupMenuDivider(),
       ],
+      // Live preview toggle (Markdown / Mermaid tabs only).
+      if (service.active?.supportsPreview ?? false)
+        _checkItem(
+          '实时预览 (Markdown / Mermaid)',
+          Icons.preview_outlined,
+          service.active?.previewEnabled ?? false,
+          service.togglePreview,
+        ),
       const PopupMenuDivider(),
       _sectionHeader('主题'),
       _checkItem('浅色', Icons.light_mode_outlined, settings.themeMode == ThemeMode.light,
@@ -395,6 +423,8 @@ class EditorMenuBar extends StatelessWidget {
         return 'YAML';
       case 'batch':
         return '批处理 (BAT/CMD)';
+      case 'mermaid':
+        return 'Mermaid 图表 (MMD)';
       case 'binary':
         return '二进制 (BIN)';
       default:

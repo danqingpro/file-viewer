@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.6';
+  static const String version = '1.10.7';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.6';
+  static const String versionNumber = '1.10.7';
 
   /// Internal build number.
-  static const int buildNumber = 18;
+  static const int buildNumber = 19;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -39,7 +39,9 @@ class AppInfo {
     '恢复最近一个关闭的文件',
     '打开文件夹作为工作区（可折叠文件树）',
     '保存逻辑：首次保存需选择路径，再次保存直接写入原路径',
-    '多格式语法高亮：txt / md / cpp / h / hpp / json / xml / html / css / js / py / yaml / bat',
+    '多格式语法高亮：txt / md / cpp / h / hpp / json / xml / html / css / js / py / yaml / bat / mermaid',
+    'Markdown 实时预览（GFM 表格/任务列表，横屏分屏）',
+    'Mermaid 图表预览与编辑（.mmd/.mermaid，离线渲染，支持深色主题）',
     '二进制文件查看：.bin / .bit / .raw / .dat / .exe / .apk 十六进制查看与编辑',
     'Word 文档预览：.doc / .docx 调用系统查看器渲染（只读）',
     '代码格式化：JSON / XML / C++ 基础排版',
@@ -73,6 +75,19 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.7',
+      date: '2026-11-07',
+      title: '语音播报修复 + 深色对比度 + 横屏 + Markdown/Mermaid 预览',
+      changes: [
+        '修复语音播报：Android 11+ TTS 引擎可见性声明、错误回调崩溃、长文分段播报、暂停/继续逻辑',
+        '深色模式语法高亮全面换用 VS Code Dark+ 配色，对比度达标；浅色模式保持原配色',
+        '横屏自适应：横屏手机自动压缩菜单栏与工具栏高度',
+        'Markdown 实时预览：横屏/宽屏左右分屏，竖屏整页预览，支持表格/任务列表/删除线',
+        '新增 Mermaid 图表：.mmd/.mermaid 文件识别、语法高亮、内嵌实时渲染、全屏查看',
+        'Markdown 内 ```mermaid 代码块直接渲染为图表，支持点击放大',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.6',
       date: '2026-09-08',

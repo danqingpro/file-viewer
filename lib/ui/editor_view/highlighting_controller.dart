@@ -21,6 +21,17 @@ class HighlightingController extends TextEditingController {
     color: Color(0xFF1E1E1E),
   );
 
+  /// Whether the surrounding theme is dark. The token palette switches
+  /// between the light (Notepad++) and dark (VS Code Dark+) maps so
+  /// syntax colors keep readable contrast in both themes.
+  bool _darkMode = false;
+
+  set darkMode(bool value) {
+    if (value == _darkMode) return;
+    _darkMode = value;
+    notifyListeners();
+  }
+
   set baseStyle(TextStyle s) {
     if (s == _baseStyle) return;
     _baseStyle = s;
@@ -82,7 +93,7 @@ class HighlightingController extends TextEditingController {
       if (seg.isNotEmpty) {
         children.add(TextSpan(
           text: seg,
-          style: HighlightPalette.styleFor(s.kind).copyWith(
+          style: HighlightPalette.styleFor(s.kind, dark: _darkMode).copyWith(
             fontFamily: 'monospace',
             fontFamilyFallback: effectiveBase.fontFamilyFallback,
             fontSize: effectiveBase.fontSize,

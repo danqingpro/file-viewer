@@ -15,7 +15,9 @@ import 'ui/pdf_viewer/pdf_viewer.dart';
 import 'ui/word_viewer/word_viewer.dart';
 import 'ui/editor_view/editor_view.dart';
 import 'ui/feedback/feedback_page.dart';
+import 'ui/markdown/markdown_preview.dart';
 import 'ui/menu/menu_bar.dart';
+import 'ui/mermaid/mermaid_view.dart';
 import 'ui/status_bar/status_bar.dart';
 import 'ui/workspace/workspace_tree.dart';
 
@@ -375,14 +377,10 @@ class _EditorShellState extends State<EditorShell> {
                                                 onBytesChanged:
                                                     _service.updateBinaryBytes,
                                               )
-                                            : EditorView(
+                                            : _EditorWithPreview(
                                                 key: ValueKey(active),
                                                 tab: active,
-                                                highlightPlugin: _service.highlightPlugin,
-                                                onTextChanged: _service.onTextChanged,
-                                                onSelectionChanged: _service.onSelectionChanged,
-                                                onControllerAttached: _service.bindLiveController,
-                                                onControllerDetached: _service.unbindLiveController,
+                                                service: _service,
                                               ),
                       ),
                       if (active != null)
@@ -422,6 +420,68 @@ class _EditorShellState extends State<EditorShell> {
     } catch (_) {
       return -1;
     }
+  }
+}
+
+/// Text editor surface with an optional live preview for Markdown and
+/// Mermaid tabs.
+///
+/// Preview layout is orientation-aware:
+///   * landscape / wide screens → editor and preview side by side (true
+///     "type on the left, see it on the right" live editing);
+///   * portrait phones → the preview replaces the editor full-pane; the
+///     toolbar 预览 button flips back to editing.
+///
+/// The pane rebuilds on every tab change so the preview tracks typing
+/// live (MermaidView debounces its own re-render).
+class _EditorWithPreview extends StatelessWidget {
+  const _EditorWithPreview({
+    super.key,
+    required this.tab,
+    required this.service,
+  });
+
+  final EditorTabController tab;
+  final EditorService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: tab,
+      builder: (context, _) {
+        final editor = EditorView(
+          tab: tab,
+          highlightPlugin: service.highlightPlugin,
+          onTextChanged: service.onTextChanged,
+          onSelectionChanged: service.onSelectionChanged,
+          onControllerAttached: service.bindLiveController,
+          onControllerDetached: service.unbindLiveController,
+        );
+
+        final previewOn = tab.previewEnabled && tab.supportsPreview;
+        if (!previewOn) return editor;
+
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final Widget preview = tab.language == 'mermaid'
+            ? MermaidView(source: tab.text, dark: isDark)
+            : MarkdownPreview(data: tab.text);
+
+        final size = MediaQuery.of(context).size;
+        final sideBySide = size.width > size.height || size.width >= 720;
+        if (!sideBySide) return preview;
+
+        final dividerColor =
+            isDark ? const Color(0xFF2D2D30) : const Color(0xFFE0E0E0);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: editor),
+            VerticalDivider(width: 1, color: dividerColor),
+            Expanded(child: preview),
+          ],
+        );
+      },
+    );
   }
 }
 

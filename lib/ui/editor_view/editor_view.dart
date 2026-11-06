@@ -115,10 +115,11 @@ class _EditorViewState extends State<EditorView> {
     final lineCount = '\n'.allMatches(tab.text).length + 1;
     final gutterText = List.generate(lineCount, (i) => '${i + 1}').join('\n');
 
-    // Push the theme-aware base style into the highlighting controller so
-    // syntax highlighting re-tokenizes against the right foreground color.
+    // Push the theme-aware base style + palette mode into the
+    // highlighting controller so syntax colors keep contrast in dark mode.
     final base = _baseStyle.copyWith(color: textColor);
     _controller.baseStyle = base;
+    _controller.darkMode = isDark;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,

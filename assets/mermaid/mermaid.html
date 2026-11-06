@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; }
+  #container {
+    width: 100%; height: 100%;
+    overflow: auto;
+    display: flex; align-items: center; justify-content: center;
+    box-sizing: border-box; padding: 8px;
+  }
+  #container svg { max-width: none; }
+  #err {
+    display: none; color: #d32f2f; font: 12px/1.5 monospace;
+    white-space: pre-wrap; padding: 12px; align-self: flex-start;
+  }
+</style>
+<script src="mermaid.min.js"></script>
+</head>
+<body>
+<div id="container"></div>
+<div id="err"></div>
+<script>
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default' });
+
+  // Called from Flutter: renders [code] with the given mermaid theme
+  // ('default' | 'dark') and reports the outcome over MermaidChannel.
+  window.renderMermaid = async function (code, theme) {
+    var err = document.getElementById('err');
+    var container = document.getElementById('container');
+    try {
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });
+      var id = 'mmd-' + Date.now();
+      var result = await mermaid.render(id, code);
+      container.innerHTML = result.svg;
+      err.style.display = 'none';
+      MermaidChannel.postMessage(JSON.stringify({ status: 'ok' }));
+    } catch (e) {
+      container.innerHTML = '';
+      err.style.display = 'block';
+      var msg = String((e && e.message) || e);
+      err.textContent = 'Mermaid 渲染失败:\n' + msg;
+      MermaidChannel.postMessage(JSON.stringify({ status: 'error', message: msg }));
+    }
+  };
+</script>
+</body>
+</html>

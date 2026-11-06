@@ -152,7 +152,7 @@ class EditorService extends ChangeNotifier {
   // ---- File operations ----------------------------------------------------
 
   static const _extensions = [
-    'txt', 'md', 'markdown',
+    'txt', 'md', 'markdown', 'mmd', 'mermaid',
     'cpp', 'cc', 'cxx', 'c', 'h', 'hpp', 'hh', 'hxx',
     'json', 'jsonc',
     'xml', 'svg', 'xhtml', 'xsd', 'xsl',
@@ -806,6 +806,14 @@ class EditorService extends ChangeNotifier {
     } else {
       _bus.emit(AppEvents.formatApplied, {'error': result.error});
     }
+    notifyListeners();
+  }
+
+  /// Toggle the live preview pane for Markdown / Mermaid tabs.
+  void togglePreview() {
+    final tab = active;
+    if (tab == null || !tab.supportsPreview) return;
+    tab.setPreviewEnabled(!tab.previewEnabled);
     notifyListeners();
   }
 

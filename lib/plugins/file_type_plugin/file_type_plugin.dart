@@ -29,6 +29,9 @@ class FileTypePlugin extends EditorPlugin {
     'md': 'md',
     'markdown': 'md',
     'mkd': 'md',
+    // Mermaid diagrams
+    'mmd': 'mermaid',
+    'mermaid': 'mermaid',
     // C / C++
     'cpp': 'cpp',
     'cc': 'cpp',
@@ -92,6 +95,8 @@ class FileTypePlugin extends EditorPlugin {
         return '纯文本 (TXT)';
       case 'md':
         return 'Markdown (MD)';
+      case 'mermaid':
+        return 'Mermaid 图表 (MMD)';
       case 'cpp':
         return 'C/C++ (cpp/h/hpp)';
       case 'json':

@@ -19,6 +19,11 @@ class EditorTabController extends ChangeNotifier {
   int _cursorOffset = 0;
   int _selectionEnd = 0;
 
+  /// Live-preview toggle for Markdown / Mermaid tabs. When true the UI
+  /// shows a rendered preview pane next to (landscape) or instead of
+  /// (portrait) the text editor.
+  bool _previewEnabled = false;
+
   /// Raw bytes for binary files (.bin/.bit/.raw/.dat). When non-null the
   /// tab is rendered by the binary viewer instead of the text editor.
   Uint8List? _bytes;
@@ -48,6 +53,17 @@ class EditorTabController extends ChangeNotifier {
   bool get isBinary => _bytes != null;
   bool get isLargeBinary => _largeBinary;
   int get largeBinaryLength => _binaryLength;
+  bool get previewEnabled => _previewEnabled;
+
+  /// Markdown and Mermaid tabs can be rendered as a live preview.
+  bool get supportsPreview =>
+      !isBinary && !isLargeBinary && (_language == 'md' || _language == 'mermaid');
+
+  void setPreviewEnabled(bool value) {
+    if (value == _previewEnabled) return;
+    _previewEnabled = value;
+    notifyListeners();
+  }
 
   /// Whether this tab holds a PDF file (based on path extension). PDF tabs
   /// are stored as binary bytes but rendered by the dedicated PdfViewer.

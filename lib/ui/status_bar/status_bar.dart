@@ -29,6 +29,7 @@ const List<String> kLanguageOptions = [
   'python',
   'yaml',
   'batch',
+  'mermaid',
 ];
 
 /// Bottom status bar, mirroring Notepad++: file type, encoding, cursor
@@ -207,6 +208,8 @@ class StatusBar extends StatelessWidget {
         return 'YAML';
       case 'batch':
         return '批处理 (BAT/CMD)';
+      case 'mermaid':
+        return 'Mermaid 图表 (MMD)';
       case 'binary':
         return '二进制 (BIN)';
       default:
