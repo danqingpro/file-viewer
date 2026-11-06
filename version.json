@@ -1,6 +1,6 @@
 {
   "latestVersion": "1.10.6",
   "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.6/file-viewer-1.10.6.apk",
-  "changelog": "1.10.6：更新支持后台自动更新（退出更新弹窗提示后台下载，完成后一键安装）；大二进制文件（≥1MB）按需加载，仅渲染可视区域并在滚动时增量读取；预留帧长/帧数量/关键字查找扩展",
+  "changelog": "1.10.6：后台自动更新（退出更新弹窗提示后台下载，完成后一键安装）；大二进制文件（≥1MB）按需加载，仅渲染可视区域并在滚动时增量读取；修复 RandomAccessFile 跨 chunk 读取 bug",
   "forceUpdate": false
 }
