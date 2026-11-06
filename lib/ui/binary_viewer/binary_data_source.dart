@@ -129,7 +129,10 @@ class FileBinaryDataSource extends BinaryDataSource {
       final chunkEnd = (chunkStart + _chunkSize).clamp(0, length);
       if (_cacheStart != chunkStart) {
         _cacheStart = chunkStart;
-        _cacheBytes = _handle.readSync(chunkEnd - chunkStart, chunkStart);
+        // RandomAccessFile.readSync reads from the current file position,
+        // so seek to the chunk start first, then read the chunk length.
+        _handle.setPositionSync(chunkStart);
+        _cacheBytes = _handle.readSync(chunkEnd - chunkStart);
       }
       final copyEnd = e < chunkEnd ? e : chunkEnd;
       final len = copyEnd - pos;
