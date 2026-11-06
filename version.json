@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.6",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.6/file-viewer-1.10.6.apk",
-  "changelog": "1.10.6：后台自动更新（退出更新弹窗提示后台下载，完成后一键安装）；大二进制文件（≥1MB）按需加载，仅渲染可视区域并在滚动时增量读取；修复 RandomAccessFile 跨 chunk 读取 bug",
+  "latestVersion": "1.10.7",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.7/file-viewer-1.10.7.apk",
+  "changelog": "1.10.7：修复语音播报（Android 11+ TTS 可见性、错误回调崩溃、长文分段、暂停/继续）；深色模式语法高亮换用高对比度配色（浅色不变）；横屏自适应布局；新增 Markdown 实时预览（横屏分屏）；新增 Mermaid 图表编辑与离线渲染（.mmd/.mermaid 及 ```mermaid 代码块）",
   "forceUpdate": false
 }
