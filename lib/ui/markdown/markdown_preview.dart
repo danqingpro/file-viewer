@@ -4,24 +4,146 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../mermaid/mermaid_view.dart';
 
-/// Live Markdown preview pane.
+/// Live Markdown preview pane with a built-in document outline (导航栏).
 ///
-/// Renders [data] with GFM extensions (tables, strikethrough, task
-/// lists). Fenced ```mermaid blocks are intercepted by [_PreBuilder] and
-/// rendered as real diagrams via the embedded WebView renderer; every
-/// other code block falls back to a themed, horizontally scrollable
-/// monospaced card. All colors are derived from the surrounding theme so
-/// the preview stays readable in both light and dark mode.
-class MarkdownPreview extends StatelessWidget {
+/// The document is split into heading-rooted sections (code fences are
+/// respected, so `#` inside a fence is not a heading). Each section is a
+/// separate [MarkdownBody] wrapped in a keyed subtree, which lets the
+/// outline jump to any heading via [Scrollable.ensureVisible] — real
+/// navigation instead of a dead table of contents.
+///
+/// Fenced ```mermaid blocks render as live diagrams; other code blocks
+/// become themed, horizontally scrollable cards. Colors follow the
+/// surrounding theme, so light/dark both stay readable.
+class MarkdownPreview extends StatefulWidget {
   const MarkdownPreview({super.key, required this.data});
 
   final String data;
 
   @override
+  State<MarkdownPreview> createState() => _MarkdownPreviewState();
+}
+
+class _MarkdownPreviewState extends State<MarkdownPreview> {
+  final ScrollController _scroll = ScrollController();
+  final List<GlobalKey> _keys = [];
+  List<_MdSection> _sections = const [];
+  bool _outlineOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuild();
+  }
+
+  @override
+  void didUpdateWidget(covariant MarkdownPreview old) {
+    super.didUpdateWidget(old);
+    if (old.data != widget.data) _rebuild();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _rebuild() {
+    _sections = _splitSections(widget.data);
+    _keys
+      ..clear()
+      ..addAll(List.generate(_sections.length, (_) => GlobalKey()));
+  }
+
+  List<_MdSection> get _headings =>
+      _sections.where((s) => s.level > 0 && s.title.isNotEmpty).toList();
+
+  Future<void> _jumpTo(_MdSection section) async {
+    final index = _sections.indexOf(section);
+    if (index < 0) return;
+    setState(() => _outlineOpen = false);
+    final ctx = _keys[index].currentContext;
+    if (ctx == null) return;
+    await Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: 0.0,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final sheet = _buildStyleSheet(theme, isDark);
 
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          controller: _scroll,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < _sections.length; i++)
+                KeyedSubtree(
+                  key: _keys[i],
+                  child: MarkdownBody(
+                    data: _sections[i].text,
+                    selectable: true,
+                    softLineBreak: true,
+                    extensionSet: md.ExtensionSet.gitHubWeb,
+                    builders: {
+                      'pre': _PreBuilder(
+                        dark: isDark,
+                        codeFg: isDark
+                            ? const Color(0xFFCE9178)
+                            : const Color(0xFF800000),
+                        codeBg: isDark
+                            ? const Color(0xFF2D2D30)
+                            : const Color(0xFFF6F8FA),
+                      ),
+                    },
+                    styleSheet: sheet,
+                    onTapLink: (text, href, title) {},
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Outline toggle — always reachable, whatever the orientation.
+        if (_headings.isNotEmpty)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _OutlineButton(
+              isDark: isDark,
+              count: _headings.length,
+              open: _outlineOpen,
+              onTap: () => setState(() => _outlineOpen = !_outlineOpen),
+            ),
+          ),
+        if (_outlineOpen && _headings.isNotEmpty) ...[
+          GestureDetector(
+            onTap: () => setState(() => _outlineOpen = false),
+            child: Container(color: Colors.black54),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _OutlinePanel(
+              headings: _headings,
+              isDark: isDark,
+              onSelect: _jumpTo,
+              onClose: () => setState(() => _outlineOpen = false),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  MarkdownStyleSheet _buildStyleSheet(ThemeData theme, bool isDark) {
     final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
     final muted = isDark ? const Color(0xFF9E9E9E) : const Color(0xFF6A737D);
     final accent = isDark ? const Color(0xFF4EA8FF) : const Color(0xFF0969DA);
@@ -31,7 +153,7 @@ class MarkdownPreview extends StatelessWidget {
     final quoteBar = isDark ? const Color(0xFF4EA8FF) : const Color(0xFFD0D7DE);
     final tableBorder = isDark ? const Color(0xFF444444) : const Color(0xFFD0D7DE);
 
-    final sheet = MarkdownStyleSheet.fromTheme(theme).copyWith(
+    return MarkdownStyleSheet.fromTheme(theme).copyWith(
       p: TextStyle(color: fg, fontSize: 14, height: 1.55),
       h1: TextStyle(color: fg, fontSize: 22, fontWeight: FontWeight.w700, height: 1.6),
       h2: TextStyle(color: fg, fontSize: 19, fontWeight: FontWeight.w700, height: 1.6),
@@ -68,17 +190,212 @@ class MarkdownPreview extends StatelessWidget {
       ),
       checkbox: TextStyle(color: fg, fontSize: 14),
     );
+  }
+}
 
-    return Markdown(
-      data: data,
-      selectable: true,
-      softLineBreak: true,
-      extensionSet: md.ExtensionSet.gitHubWeb,
-      builders: {
-        'pre': _PreBuilder(dark: isDark, codeFg: codeFg, codeBg: codeBg),
-      },
-      styleSheet: sheet,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+/// A heading-rooted slice of the document. `level == 0` marks the
+/// preamble (content before the first heading) and is excluded from the
+/// outline.
+class _MdSection {
+  _MdSection({required this.level, required this.title, required this.text});
+
+  final int level;
+  final String title;
+  final String text;
+}
+
+final RegExp _headingRe = RegExp(r'^(#{1,6})\s+(.*)$');
+
+/// Split [src] into heading-rooted sections, ignoring `#` inside fenced
+/// code blocks so shell/C comments are never mistaken for headings.
+List<_MdSection> _splitSections(String src) {
+  final sections = <_MdSection>[];
+  final buf = <String>[];
+  int curLevel = 0;
+  String curTitle = '';
+  bool inFence = false;
+  String fenceMark = '';
+
+  void flush() {
+    final text = buf.join('\n');
+    if (text.trim().isEmpty && curTitle.isEmpty) {
+      buf.clear();
+      return;
+    }
+    sections.add(_MdSection(level: curLevel, title: curTitle, text: text));
+    buf.clear();
+    curLevel = 0;
+    curTitle = '';
+  }
+
+  for (final line in src.split('\n')) {
+    final t = line.trimLeft();
+    if (t.startsWith('```') || t.startsWith('~~~')) {
+      final mark = t.substring(0, 3);
+      if (!inFence) {
+        inFence = true;
+        fenceMark = mark;
+      } else if (t.startsWith(fenceMark)) {
+        inFence = false;
+      }
+      buf.add(line);
+      continue;
+    }
+    if (!inFence) {
+      final m = _headingRe.firstMatch(line);
+      if (m != null) {
+        flush();
+        curLevel = m.group(1)!.length;
+        curTitle = m.group(2)!.trim();
+        buf.add(line);
+        continue;
+      }
+    }
+    buf.add(line);
+  }
+  flush();
+  if (sections.isEmpty) {
+    return [_MdSection(level: 0, title: '', text: src)];
+  }
+  return sections;
+}
+
+/// Floating "大纲" pill in the preview corner.
+class _OutlineButton extends StatelessWidget {
+  const _OutlineButton({
+    required this.isDark,
+    required this.count,
+    required this.open,
+    required this.onTap,
+  });
+
+  final bool isDark;
+  final int count;
+  final bool open;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xE6252526) : const Color(0xF5FFFFFF);
+    final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
+    return Material(
+      color: bg,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(open ? Icons.close : Icons.toc, size: 16, color: fg),
+              const SizedBox(width: 4),
+              Text(
+                open ? '关闭大纲' : '大纲 $count',
+                style: TextStyle(fontSize: 12, color: fg),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Slide-in outline panel listing every heading, indented by level.
+class _OutlinePanel extends StatelessWidget {
+  const _OutlinePanel({
+    required this.headings,
+    required this.isDark,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final List<_MdSection> headings;
+  final bool isDark;
+  final ValueChanged<_MdSection> onSelect;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF252526) : Colors.white;
+    final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
+    final width = (MediaQuery.of(context).size.width * 0.78).clamp(200.0, 320.0);
+
+    return Material(
+      color: bg,
+      elevation: 8,
+      child: SizedBox(
+        width: width,
+        height: double.infinity,
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 12),
+                    Icon(Icons.toc, size: 16,
+                        color: isDark ? Colors.white70 : Colors.black54),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '文档大纲 (${headings.length})',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: onClose,
+                      icon: Icon(Icons.close, size: 18,
+                          color: isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE0E0E0),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  itemCount: headings.length,
+                  itemBuilder: (context, i) {
+                    final h = headings[i];
+                    final indent = ((h.level - 1) * 14).toDouble();
+                    final isMajor = h.level <= 2;
+                    return InkWell(
+                      onTap: () => onSelect(h),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(12 + indent, 8, 10, 8),
+                        child: Text(
+                          h.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isMajor ? 13.5 : 12.5,
+                            height: 1.35,
+                            fontWeight:
+                                isMajor ? FontWeight.w600 : FontWeight.w400,
+                            color: isMajor ? fg : (isDark ? const Color(0xFFB8B8B8) : const Color(0xFF555555)),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

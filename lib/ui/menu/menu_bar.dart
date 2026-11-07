@@ -4,6 +4,7 @@ import '../../core/config/app_info.dart';
 import '../../core/config/app_settings.dart';
 import '../../core/plugin_manager/plugin.dart';
 import '../../editor_service.dart';
+import '../../plugins/voice_plugin/voice_plugin.dart' show VoiceState;
 import '../status_bar/status_bar.dart' show kEncodingOptions, kLanguageOptions;
 
 /// Top menu strip + quick-access toolbar, styled after VS Code:
@@ -27,6 +28,7 @@ class EditorMenuBar extends StatelessWidget {
     this.onOpenWorkspace,
     this.onToggleWorkspace,
     this.onCloseTab,
+    this.onExportPdf,
   });
 
   final EditorService service;
@@ -54,6 +56,10 @@ class EditorMenuBar extends StatelessWidget {
   /// Triggered by the toolbar "切换工作区" button — opens or closes
   /// the workspace drawer. No-op when no workspace is loaded.
   final VoidCallback? onToggleWorkspace;
+
+  /// Triggered by "文件 → 导出 PDF…". Only meaningful for Markdown /
+  /// Mermaid tabs; the shell performs the actual render + file save.
+  final VoidCallback? onExportPdf;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +138,20 @@ class EditorMenuBar extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   children: [
+                    // Preview toggle moved to the FRONT of the toolbar: on
+                    // landscape phones the later buttons scroll off-screen,
+                    // which is why the 预览 button used to be invisible.
+                    if (service.active?.supportsPreview ?? false)
+                      _toolButton(
+                        context,
+                        (service.active?.previewEnabled ?? false)
+                            ? Icons.edit_note_outlined
+                            : Icons.preview_outlined,
+                        (service.active?.previewEnabled ?? false) ? '编辑' : '预览',
+                        service.togglePreview,
+                        mode,
+                        isMobile,
+                      ),
                     _toolButton(context, Icons.note_add_outlined, '新建', service.newTab, mode, isMobile),
                     _toolButton(context, Icons.folder_open_outlined, '打开', service.openFiles, mode, isMobile),
                     // Workspace toggle button — only visible when a workspace is loaded.
@@ -152,20 +172,24 @@ class EditorMenuBar extends StatelessWidget {
                     _toolButton(context, Icons.redo_outlined, '重做', service.redo, mode, isMobile),
                     _divider(isDark, isMobile),
                     _toolButton(context, Icons.format_align_left_outlined, '格式化', service.applyFormat, mode, isMobile),
-                    _toolButton(context, Icons.record_voice_over_outlined, '语音播报', service.speakSelected, mode, isMobile),
-                    // Markdown / Mermaid live-preview toggle — only shown for
-                    // tabs that support rendering.
-                    if (service.active?.supportsPreview ?? false)
-                      _toolButton(
-                        context,
-                        (service.active?.previewEnabled ?? false)
-                            ? Icons.edit_note_outlined
-                            : Icons.preview_outlined,
-                        (service.active?.previewEnabled ?? false) ? '编辑' : '预览',
-                        service.togglePreview,
-                        mode,
-                        isMobile,
-                      ),
+                    // Voice button is a toggle: speak when idle, stop when
+                    // already narrating. A floating voice bar also appears
+                    // while playing (see app.dart).
+                    ValueListenableBuilder<VoiceState>(
+                      valueListenable: service.voicePlugin.stateListenable,
+                      builder: (context, voiceState, _) {
+                        final busy = voiceState == VoiceState.speaking ||
+                            voiceState == VoiceState.paused;
+                        return _toolButton(
+                          context,
+                          busy ? Icons.stop_circle_outlined : Icons.record_voice_over_outlined,
+                          busy ? '停止播报' : '语音播报',
+                          service.toggleVoice,
+                          mode,
+                          isMobile,
+                        );
+                      },
+                    ),
                     _divider(isDark, isMobile),
                     _themeButton(context, mode, isMobile),
                     _toolButton(context, Icons.info_outline, '关于', onAbout, mode, isMobile),
@@ -197,6 +221,11 @@ class EditorMenuBar extends StatelessWidget {
       _item('全部保存', Icons.save_alt_outlined, service.saveAll, shortcut: 'Ctrl+Shift+L'),
       _item('重命名…', Icons.drive_file_rename_outline, onRename ?? () {}, shortcut: 'Ctrl+Shift+S'),
       const PopupMenuDivider(),
+      // PDF export — only for Markdown / Mermaid tabs.
+      if (service.active?.supportsPreview ?? false) ...[
+        _item('导出 PDF…', Icons.picture_as_pdf_outlined, onExportPdf ?? () {}),
+        const PopupMenuDivider(),
+      ],
       _item('关闭标签页', Icons.close_outlined,
           onCloseTab ?? () => service.closeTab(service.activeIndex),
           shortcut: 'Ctrl+W'),

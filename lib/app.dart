@@ -1,13 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'core/config/app_info.dart';
 import 'core/config/app_settings.dart';
 import 'core/config/app_theme.dart';
 import 'core/editor_kernel/editor_state.dart';
+import 'core/export/pdf_exporter.dart';
 import 'core/update/background_update_service.dart';
 import 'core/update/update_dialog.dart' show manualCheckForUpdate, UpdateDialog;
 import 'editor_service.dart';
+import 'plugins/voice_plugin/voice_plugin.dart' show VoiceState;
 import 'ui/about/about_page.dart';
 import 'ui/binary_viewer/binary_viewer.dart';
 import 'ui/binary_viewer/large_binary_viewer.dart';
@@ -240,6 +246,93 @@ class _EditorShellState extends State<EditorShell> {
     );
   }
 
+  /// 文件 → 导出 PDF…：renders the active Markdown / Mermaid tab to a
+  /// PDF with a clickable table of contents, saves it under the app
+  /// documents folder, then hands it to the system viewer.
+  Future<void> _exportActivePdf() async {
+    final tab = _service.active;
+    if (tab == null || !tab.supportsPreview) {
+      _showSnack('当前文件不支持导出 PDF（仅 Markdown / Mermaid 可用）');
+      return;
+    }
+    if (tab.text.trim().isEmpty) {
+      _showSnack('文件内容为空，没有可导出的内容');
+      return;
+    }
+
+    final link = tab.label;
+    final stem = link.replaceAll(
+      RegExp(r'\.(md|markdown|mkd|mmd|mermaid)$', caseSensitive: false),
+      '',
+    );
+    final safeName = stem.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    _showProgressDialog('正在生成 PDF…');
+
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '')
+          .replaceAll('.', '')
+          .substring(0, 15);
+      final outPath = '${docs.path}/exports/$safeName-$stamp.pdf';
+      final path = await PdfExporter.exportMarkdown(
+        markdown: tab.text,
+        title: safeName,
+        outputPath: outPath,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // dismiss progress
+      _showSnack(
+        '已导出 PDF：$path',
+        action: SnackBarAction(
+          label: '打开',
+          onPressed: () => OpenFilex.open(path),
+        ),
+      );
+      await OpenFilex.open(path);
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      _showSnack('导出 PDF 失败：$e');
+    }
+  }
+
+  /// Non-dismissible progress dialog shown while the PDF renders.
+  void _showProgressDialog(String message) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSnack(String message, {SnackBarAction? action}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 12)),
+        action: action,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
   /// Manually check for updates (帮助 → 检查更新).
   void _onCheckUpdate() {
     manualCheckForUpdate(context);
@@ -355,6 +448,7 @@ class _EditorShellState extends State<EditorShell> {
                         onCheckUpdate: _onCheckUpdate,
                         onOpenWorkspace: _openWorkspace,
                         onToggleWorkspace: _toggleWorkspaceDrawer,
+                        onExportPdf: _exportActivePdf,
                         onCloseTab: () => _closeTabWithConfirm(_service.activeIndex),
                       ),
                       _TabStrip(service: _service, onCloseTab: _closeTabWithConfirm),
@@ -381,6 +475,7 @@ class _EditorShellState extends State<EditorShell> {
                                                 key: ValueKey(active),
                                                 tab: active,
                                                 service: _service,
+                                                onExportPdf: _exportActivePdf,
                                               ),
                       ),
                       if (active != null)
@@ -399,6 +494,13 @@ class _EditorShellState extends State<EditorShell> {
                     right: 12,
                     bottom: 12,
                     child: const _BackgroundUpdateBanner(),
+                  ),
+                  // Floating voice controls while narration is playing.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 40,
+                    child: Center(child: _VoiceBar(service: _service)),
                   ),
                 ],
               ),
@@ -423,62 +525,217 @@ class _EditorShellState extends State<EditorShell> {
   }
 }
 
-/// Text editor surface with an optional live preview for Markdown and
-/// Mermaid tabs.
+/// Text editor surface with an exclusive Markdown / Mermaid preview mode.
 ///
-/// Preview layout is orientation-aware:
-///   * landscape / wide screens → editor and preview side by side (true
-///     "type on the left, see it on the right" live editing);
-///   * portrait phones → the preview replaces the editor full-pane; the
-///     toolbar 预览 button flips back to editing.
-///
-/// The pane rebuilds on every tab change so the preview tracks typing
-/// live (MermaidView debounces its own re-render).
+/// Editing and preview are **mutually exclusive** (as requested): the tab
+/// is either showing the source editor or the rendered preview, in both
+/// portrait and landscape. The preview gets its own compact top bar with
+/// 编辑 / 导出 PDF so the way back is always visible, and the toolbar
+/// 预览 button is pinned to the front of the toolbar so it cannot scroll
+/// off-screen in landscape.
 class _EditorWithPreview extends StatelessWidget {
   const _EditorWithPreview({
     super.key,
     required this.tab,
     required this.service,
+    required this.onExportPdf,
   });
 
   final EditorTabController tab;
   final EditorService service;
+  final VoidCallback onExportPdf;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: tab,
       builder: (context, _) {
-        final editor = EditorView(
-          tab: tab,
-          highlightPlugin: service.highlightPlugin,
-          onTextChanged: service.onTextChanged,
-          onSelectionChanged: service.onSelectionChanged,
-          onControllerAttached: service.bindLiveController,
-          onControllerDetached: service.unbindLiveController,
-        );
-
         final previewOn = tab.previewEnabled && tab.supportsPreview;
-        if (!previewOn) return editor;
+
+        if (!previewOn) {
+          return EditorView(
+            tab: tab,
+            highlightPlugin: service.highlightPlugin,
+            onTextChanged: service.onTextChanged,
+            onSelectionChanged: service.onSelectionChanged,
+            onControllerAttached: service.bindLiveController,
+            onControllerDetached: service.unbindLiveController,
+          );
+        }
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final Widget preview = tab.language == 'mermaid'
             ? MermaidView(source: tab.text, dark: isDark)
             : MarkdownPreview(data: tab.text);
 
-        final size = MediaQuery.of(context).size;
-        final sideBySide = size.width > size.height || size.width >= 720;
-        if (!sideBySide) return preview;
-
-        final dividerColor =
-            isDark ? const Color(0xFF2D2D30) : const Color(0xFFE0E0E0);
-        return Row(
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: editor),
-            VerticalDivider(width: 1, color: dividerColor),
+            _PreviewTopBar(
+              isDark: isDark,
+              title: tab.language == 'mermaid' ? '图表预览' : '预览',
+              onEdit: service.togglePreview,
+              onExportPdf: onExportPdf,
+            ),
             Expanded(child: preview),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Compact bar shown above the rendered preview: 编辑 (back to source),
+/// 导出 PDF. Kept separate from the app menu/toolbar so the exit path is
+/// never hidden by the landscape toolbar overflow.
+class _PreviewTopBar extends StatelessWidget {
+  const _PreviewTopBar({
+    required this.isDark,
+    required this.title,
+    required this.onEdit,
+    required this.onExportPdf,
+  });
+
+  final bool isDark;
+  final String title;
+  final VoidCallback onEdit;
+  final VoidCallback onExportPdf;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF252526) : const Color(0xFFF3F3F3);
+    final border = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFE0E0E0);
+    final fg = isDark ? const Color(0xFFCCCCCC) : const Color(0xFF333333);
+    return Container(
+      height: 34,
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(bottom: BorderSide(color: border, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black45,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const Spacer(),
+          _barButton(
+            icon: Icons.picture_as_pdf_outlined,
+            label: '导出 PDF',
+            fg: fg,
+            onTap: onExportPdf,
+          ),
+          const SizedBox(width: 4),
+          _barButton(
+            icon: Icons.edit_note_outlined,
+            label: '编辑',
+            fg: fg,
+            onTap: onEdit,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _barButton({
+    required IconData icon,
+    required String label,
+    required Color fg,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: fg),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 12, color: fg)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Floating voice playback control. Appears while narration is running
+/// and offers 暂停/继续 + 停止 — the fix for "播报开启后关不掉".
+class _VoiceBar extends StatelessWidget {
+  const _VoiceBar({required this.service});
+
+  final EditorService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ValueListenableBuilder<VoiceState>(
+      valueListenable: service.voicePlugin.stateListenable,
+      builder: (context, state, _) {
+        final busy = state == VoiceState.speaking || state == VoiceState.paused;
+        if (!busy) return const SizedBox.shrink();
+        final playing = state == VoiceState.speaking;
+        final bg = isDark ? const Color(0xF2252526) : const Color(0xF2FFFFFF);
+        final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
+        final border = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFD0D0D0);
+        return Material(
+          color: bg,
+          elevation: 4,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: border, width: 0.8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  playing ? Icons.graphic_eq : Icons.pause_circle_outline,
+                  size: 16,
+                  color: const Color(0xFF007ACC),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  playing ? '正在播报' : '已暂停',
+                  style: TextStyle(fontSize: 12, color: fg),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () async {
+                    if (playing) {
+                      await service.pauseVoice();
+                    } else {
+                      await service.resumeVoice();
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(playing ? '暂停' : '继续',
+                      style: const TextStyle(fontSize: 12)),
+                ),
+                TextButton(
+                  onPressed: service.stopVoice,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: const Color(0xFFD32F2F),
+                  ),
+                  child: const Text('停止', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

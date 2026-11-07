@@ -59,6 +59,15 @@ class VoicePlugin extends EditorPlugin {
   VoiceState get state => _state;
   String? get lastError => _lastError;
 
+  /// Observable playback state for the UI. The plugin is not a
+  /// ChangeNotifier, but the shell still needs an always-visible
+  /// play/stop control; a ValueNotifier keeps that cheap and precise.
+  final ValueNotifier<VoiceState> stateListenable =
+      ValueNotifier<VoiceState>(VoiceState.idle);
+
+  bool get isBusy =>
+      _state == VoiceState.speaking || _state == VoiceState.paused;
+
   @override
   void initialize(EventBus bus) {
     // The plugin contract is sync, so kick off async init here and keep
@@ -97,8 +106,7 @@ class VoicePlugin extends EditorPlugin {
     } catch (e) {
       _tts = null;
       _lastError = '语音引擎不可用：$e';
-      _state = VoiceState.error;
-      bus.emit(AppEvents.voiceStatus, {'state': _state.name, 'error': _lastError});
+      _setState(VoiceState.error, bus);
     }
   }
 
@@ -107,7 +115,7 @@ class VoicePlugin extends EditorPlugin {
     _generation++;
     _tts?.stop();
     _tts = null;
-    _state = VoiceState.idle;
+    stateListenable.value = VoiceState.idle;
   }
 
   /// Speak [text] (replaces any current utterance). Long texts are split
@@ -267,6 +275,7 @@ class VoicePlugin extends EditorPlugin {
 
   void _setState(VoiceState s, EventBus bus) {
     _state = s;
+    stateListenable.value = s;
     bus.emit(AppEvents.voiceStatus, {'state': s.name});
   }
 }

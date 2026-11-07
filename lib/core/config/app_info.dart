@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.7';
+  static const String version = '1.10.8';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.7';
+  static const String versionNumber = '1.10.8';
 
   /// Internal build number.
-  static const int buildNumber = 19;
+  static const int buildNumber = 20;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -41,7 +41,9 @@ class AppInfo {
     '保存逻辑：首次保存需选择路径，再次保存直接写入原路径',
     '多格式语法高亮：txt / md / cpp / h / hpp / json / xml / html / css / js / py / yaml / bat / mermaid',
     'Markdown 实时预览（GFM 表格/任务列表，横屏分屏）',
+    'Markdown 大纲导航（点击标题跳转章节）',
     'Mermaid 图表预览与编辑（.mmd/.mermaid，离线渲染，支持深色主题）',
+    '导出 PDF（带可点击目录，内置中文字体，离线可用）',
     '二进制文件查看：.bin / .bit / .raw / .dat / .exe / .apk 十六进制查看与编辑',
     'Word 文档预览：.doc / .docx 调用系统查看器渲染（只读）',
     '代码格式化：JSON / XML / C++ 基础排版',
@@ -75,6 +77,18 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.8',
+      date: '2026-11-07',
+      title: '语音可停止 + 编辑/预览互斥 + 大纲导航 + 导出 PDF',
+      changes: [
+        '语音播报按钮改为开关：播放中再次点击即停止；新增悬浮播报控制条（暂停/继续/停止）',
+        '横屏下「预览/编辑」改为互斥模式，不再左右分屏；预览顶部固定「编辑 / 导出 PDF」按钮',
+        '预览工具栏按钮前移至工具栏最左侧，横屏滚动时不再被挤到屏幕外',
+        'Markdown 预览新增文档大纲导航：按标题层级列出，点击跳转到对应章节',
+        '新增「导出 PDF」：生成带可点击目录的 A4 PDF（内置中文字体、页码、章节内链）',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.7',
       date: '2026-11-07',

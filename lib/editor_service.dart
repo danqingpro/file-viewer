@@ -827,6 +827,18 @@ class EditorService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toolbar behaviour for the 语音播报 button: start speaking when idle,
+  /// stop playback when a narration is already running. This is what
+  /// makes the button a real toggle — previously the only way to stop was
+  /// the 语音 menu, so playback felt impossible to cancel.
+  Future<void> toggleVoice() async {
+    if (_voice.isBusy) {
+      await stopVoice();
+    } else {
+      await speakSelected();
+    }
+  }
+
   Future<void> speakAll() async {
     final tab = active;
     if (tab == null) return;
