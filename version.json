@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.7",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.7/file-viewer-1.10.7.apk",
-  "changelog": "1.10.7：修复语音播报（Android 11+ TTS 可见性、错误回调崩溃、长文分段、暂停/继续）；深色模式语法高亮换用高对比度配色（浅色不变）；横屏自适应布局；新增 Markdown 实时预览（横屏分屏）；新增 Mermaid 图表编辑与离线渲染（.mmd/.mermaid 及 ```mermaid 代码块）",
+  "latestVersion": "1.10.8",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.8/file-viewer-1.10.8.apk",
+  "changelog": "1.10.8：语音播报可随时停止（工具栏开关 + 悬浮控制条：暂停/继续/停止）；横屏下编辑与预览改为互斥模式，预览顶部固定「编辑 / 导出 PDF」，预览按钮前移至工具栏首位；Markdown 预览新增文档大纲，可按标题跳转章节；新增导出 PDF（可点击目录 + PDF 书签大纲 + 页码，内置中文字体，离线可用）",
   "forceUpdate": false
 }
