@@ -5,6 +5,18 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Permanent release signing identity. Using the per-machine debug keystore
+// (as this module used to) produced a DIFFERENT certificate on every build
+// machine, so Android rejected every update with "已安装了一个版本"
+// (INSTALL_FAILED_UPDATE_INCOMPATIBLE). All releases must be signed with
+// the keystore referenced by android/key.properties.
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.example.notepadpp"
     // flutter_tts compiles against SDK 36; pin it explicitly so the build
@@ -35,11 +47,31 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseKeystore) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Always sign with the permanent release key so consecutive
+            // versions can overwrite each other. Falls back to the debug
+            // key only when key.properties is absent (local experiments),
+            // and warns loudly because such a build cannot update an
+            // existing install.
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.release
+            } else {
+                println "WARNING: android/key.properties not found — release APK " +
+                        "signed with the debug key and will NOT update an installed app."
+                signingConfig = signingConfigs.debug
+            }
         }
     }
 

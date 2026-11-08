@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.8';
+  static const String version = '1.10.9';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.8';
+  static const String versionNumber = '1.10.9';
 
   /// Internal build number.
-  static const int buildNumber = 20;
+  static const int buildNumber = 21;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -77,6 +77,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.9',
+      date: '2026-11-08',
+      title: '修复更新安装冲突（固定应用签名）',
+      changes: [
+        '修复：在线更新提示"已安装了一个版本"／安装冲突。根因是历史版本使用各构建机自动生成的 debug 签名，每个版本证书都不同，Android 不允许覆盖安装',
+        '改用永久 release 签名密钥（android/key.properties + upload-keystore.jks），此后所有版本签名一致，可正常覆盖升级',
+        '注意：从旧版本升级到 1.10.9 需要先卸载一次（签名更换无法避免），此后可一直在线更新',
+        '安装失败时提示文案补充签名冲突的排查指引',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.8',
       date: '2026-11-07',

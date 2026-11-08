@@ -67,7 +67,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
     if (!ok && mounted) {
       setState(() {
         _downloading = false;
-        _error = '无法启动安装，请手动安装下载的 APK';
+        // Signature mismatch shows up as "已安装了一个版本" / 安装冲突.
+        // Versions ≤1.10.8 were signed with per-machine debug keys, so an
+        // in-place update is rejected by Android; the only fix is to
+        // uninstall the old build once.
+        _error = '无法启动安装。若系统提示"已安装了一个版本"或签名冲突，'
+            '请先卸载旧版本再安装（旧版本使用了不同的签名）。';
       });
     }
   }
