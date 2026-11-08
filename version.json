@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.8",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.8/file-viewer-1.10.8.apk",
-  "changelog": "1.10.8：语音播报可随时停止（工具栏开关 + 悬浮控制条：暂停/继续/停止）；横屏下编辑与预览改为互斥模式，预览顶部固定「编辑 / 导出 PDF」，预览按钮前移至工具栏首位；Markdown 预览新增文档大纲，可按标题跳转章节；新增导出 PDF（可点击目录 + PDF 书签大纲 + 页码，内置中文字体，离线可用）",
+  "latestVersion": "1.10.9",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.9/file-viewer-1.10.9.apk",
+  "changelog": "1.10.9：修复在线更新安装冲突。根因是历史版本各自使用构建机的临时 debug 签名，每版证书都不同，Android 拒绝覆盖安装。本版起改用永久 release 签名，此后可正常覆盖升级。注意：从旧版本升级到 1.10.9 需要先卸载一次旧版本。",
   "forceUpdate": false
 }
