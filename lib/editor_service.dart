@@ -516,6 +516,19 @@ class EditorService extends ChangeNotifier {
     await _openPath(path);
   }
 
+  /// Open one or more files by path. Used by the "Open with" / "Share
+  /// with" flow — the shell forwards paths received from the OS share
+  /// sheet.
+  Future<void> openPaths(List<String> paths) async {
+    for (final p in paths) {
+      await _openPath(p);
+    }
+    if (_tabs.isNotEmpty) {
+      _active = _tabs.length - 1;
+      notifyListeners();
+    }
+  }
+
   Future<void> _openPath(String path) async {
     try {
       final isPdf = _pdf.isPdf(path);

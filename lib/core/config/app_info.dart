@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.9';
+  static const String version = '1.10.10';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.9';
+  static const String versionNumber = '1.10.10';
 
   /// Internal build number.
-  static const int buildNumber = 21;
+  static const int buildNumber = 22;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -77,6 +77,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.10',
+      date: '2026-11-08',
+      title: '支持「打开方式 / 分享到」直接打开文件',
+      changes: [
+        '新增：在微信 / QQ / 文件管理器中选择「用其他应用打开」或「分享 → 发送到」时，本应用出现在候选列表中',
+        '支持 ACTION_VIEW / ACTION_EDIT（打开方式）与 ACTION_SEND / ACTION_SEND_MULTIPLE（分享）',
+        'content:// 共享文件自动复制到应用缓存目录后再打开，确保 Flutter 可正常读取',
+        '冷启动与运行中分享均可处理（singleTop + onNewIntent），多文件依次打开并激活最后一个标签',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.9',
       date: '2026-11-08',

@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.9",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.9/file-viewer-1.10.9.apk",
-  "changelog": "1.10.9：修复在线更新安装冲突。根因是历史版本各自使用构建机的临时 debug 签名，每版证书都不同，Android 拒绝覆盖安装。本版起改用永久 release 签名，此后可正常覆盖升级。注意：从旧版本升级到 1.10.9 需要先卸载一次旧版本。",
+  "latestVersion": "1.10.10",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.10/file-viewer-1.10.10.apk",
+  "changelog": "1.10.10：支持「打开方式 / 分享到」直接打开文件。在微信 / QQ / 文件管理器中选择「用其他应用打开」或「分享 → 发送到」时，本应用出现在候选列表中，选择后自动打开对应文件。支持单文件和多文件分享，content:// 共享文件自动复制到缓存目录后打开。",
   "forceUpdate": false
 }

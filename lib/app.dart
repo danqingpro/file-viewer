@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
@@ -6,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'core/config/app_info.dart';
 import 'core/config/app_settings.dart';
 import 'core/config/app_theme.dart';
+import 'core/share/share_receiver.dart';
 import 'core/editor_kernel/editor_state.dart';
 import 'core/export/pdf_exporter.dart';
 import 'core/update/background_update_service.dart';
@@ -81,16 +84,28 @@ class _EditorShellState extends State<EditorShell> {
   late final FocusNode _focusNode;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Subscription to paths arriving from the OS "Open with" / "Share
+  /// with" sheet (WeChat 分享 → 发送到, file manager 其他应用打开, …).
+  StreamSubscription<List<String>>? _shareSub;
+
   @override
   void initState() {
     super.initState();
     _service = EditorService()..addListener(_onServiceChanged);
     _focusNode = FocusNode();
     BackgroundUpdateService.instance.addListener(_onBackgroundUpdate);
+
+    // Hook up the share receiver: pull any paths that arrived during cold
+    // start, then keep listening for shares while the app is running.
+    ShareReceiver.instance.init();
+    _shareSub = ShareReceiver.instance.paths.listen((paths) {
+      _service.openPaths(paths);
+    });
   }
 
   @override
   void dispose() {
+    _shareSub?.cancel();
     BackgroundUpdateService.instance.removeListener(_onBackgroundUpdate);
     _service.removeListener(_onServiceChanged);
     _service.dispose();
