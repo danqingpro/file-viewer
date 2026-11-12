@@ -130,14 +130,10 @@ class UpdateService {
       }
     }
 
-    if (succeeded == 0) {
-      // Every mirror failed — network outage or all mirrors unreachable.
-      throw UpdateFetchException('无法连接到更新服务器（已尝试 $attempted 个镜像）');
-    }
-
     // Authoritative sources that do not depend on the CDN-cached manifest.
     // They carry no changelog, but they tell us the true newest tag even
     // when every version.json mirror is stale.
+
     for (final fetch in <Future<UpdateInfo?> Function()>[
       _fetchFromReleasesApi,
       _fetchFromTagList,
@@ -152,6 +148,11 @@ class UpdateService {
       } catch (_) {
         // Optional source — ignore and keep whatever the mirrors gave us.
       }
+    }
+
+    if (succeeded == 0) {
+      // No mirror and no authoritative source answered — real network outage.
+      throw UpdateFetchException('无法连接到更新服务器（已尝试 $attempted 个镜像）');
     }
 
     if (best == null) return null;

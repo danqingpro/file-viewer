@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.13';
+  static const String version = '1.10.14';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.13';
+  static const String versionNumber = '1.10.14';
 
   /// Internal build number.
-  static const int buildNumber = 25;
+  static const int buildNumber = 26;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -76,6 +76,15 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.14',
+      date: '2026-11-12',
+      title: '更新检测健壮性修复',
+      changes: [
+        '修复：当所有 jsDelivr 镜像均不可达时，会直接报错而不去尝试 GitHub 权威更新源',
+        '现在即使镜像全部失效，只要 GitHub Releases 可访问，仍能正确检测到新版本',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.13',
       date: '2026-11-12',
