@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.12';
+  static const String version = '1.10.13';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.12';
+  static const String versionNumber = '1.10.13';
 
   /// Internal build number.
-  static const int buildNumber = 24;
+  static const int buildNumber = 25;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -76,6 +76,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.13',
+      date: '2026-11-12',
+      title: '修复检查更新（CDN 旧缓存）',
+      changes: [
+        '根因：手机可访问的 jsDelivr 节点仍缓存旧 version.json（1.10.10），导致 1.10.11 误判为已是最新版本',
+        '新增 GitHub Releases 版本清单作为首选更新源（releases/latest/download/version.json），不受 CDN 长缓存影响',
+        '新增 GitHub Releases API 与 jsDelivr 标签列表两个权威兜底源，直接读取最新 tag',
+        '所有来源并行比对，取最高版本；旧 CDN 返回的过期数据不会再让检测提前结束',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.12',
       date: '2026-11-12',

@@ -23,13 +23,33 @@ import 'update_info.dart';
 class UpdateService {
   UpdateService({http.Client? client}) : _client = client ?? http.Client();
 
+  /// GitHub repository slug, used to build canonical release URLs.
+  static const String kRepoSlug = 'danqingpro/file-viewer';
+
+  /// Authoritative manifest attached as an asset to every release. The
+  /// `/releases/latest/download/...` alias always resolves to the newest
+  /// release and is **not** cached for hours like jsDelivr's `@main`.
+  static const String kReleasesLatestJsonUrl =
+      'https://github.com/danqingpro/file-viewer/releases/latest/download/version.json';
+
+  /// GitHub Releases API — returns the newest non-prerelease tag directly.
+  static const String kReleasesApiUrl =
+      'https://api.github.com/repos/danqingpro/file-viewer/releases/latest';
+
+  /// jsDelivr package metadata — a live list of git tags. Unlike
+  /// `@main/version.json`, this endpoint is not edge-cached for hours, so
+  /// it still reports the newest tag when a POP serves a stale JSON file.
+  static const String kTagListUrl =
+      'https://data.jsdelivr.com/v1/package/gh/danqingpro/file-viewer';
+
   /// URLs of the hosted `version.json`, ordered by freshness + reachability
   /// in China. Every source is queried and the highest version wins.
   ///
-  /// `cdn.jsdelivr.net` is intentionally excluded: its `@main` cache can
-  /// keep serving an older manifest for days, which made 1.10.9 report
-  /// "已是最新版本" after 1.10.10 had already been released.
+  /// The jsDelivr mirrors are kept as fallbacks only: their `@main` cache
+  /// can keep serving an older manifest for days, which made older builds
+  /// report "已是最新版本" long after a release had shipped.
   static const List<String> kUpdateCheckUrls = [
+    kReleasesLatestJsonUrl,
     'https://fastly.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
     'https://gcore.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
     'https://testingcf.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
@@ -115,10 +135,108 @@ class UpdateService {
       throw UpdateFetchException('无法连接到更新服务器（已尝试 $attempted 个镜像）');
     }
 
+    // Authoritative sources that do not depend on the CDN-cached manifest.
+    // They carry no changelog, but they tell us the true newest tag even
+    // when every version.json mirror is stale.
+    for (final fetch in <Future<UpdateInfo?> Function()>[
+      _fetchFromReleasesApi,
+      _fetchFromTagList,
+    ]) {
+      try {
+        final info = await fetch();
+        if (info == null) continue;
+        succeeded++;
+        if (best == null || _isNewer(info.latestVersion, best.latestVersion)) {
+          best = info;
+        }
+      } catch (_) {
+        // Optional source — ignore and keep whatever the mirrors gave us.
+      }
+    }
+
     if (best == null) return null;
     if (!_isNewer(best.latestVersion, current)) return null;
     return best;
   }
+
+  /// Newest release tag + APK asset straight from the GitHub Releases API.
+  /// Not CDN-cached, so it is immune to stale `version.json` mirrors.
+  Future<UpdateInfo?> _fetchFromReleasesApi() async {
+    final resp = await _client.get(
+      Uri.parse(kReleasesApiUrl),
+      headers: const {
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'file-viewer-updater',
+        'Cache-Control': 'no-cache',
+      },
+    ).timeout(const Duration(seconds: 12));
+    if (resp.statusCode != 200) return null;
+
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! Map) return null;
+
+    final tag = (decoded['tag_name'] as String? ?? '')
+        .replaceFirst(RegExp(r'^[vV]'), '')
+        .trim();
+    if (tag.isEmpty) return null;
+
+    var apkUrl = '';
+    final assets = decoded['assets'];
+    if (assets is List) {
+      for (final asset in assets) {
+        if (asset is! Map) continue;
+        final name = asset['name'] as String? ?? '';
+        if (!name.endsWith('.apk')) continue;
+        apkUrl = asset['browser_download_url'] as String? ?? '';
+        if (apkUrl.isNotEmpty) break;
+      }
+    }
+
+    return UpdateInfo(
+      latestVersion: tag,
+      apkUrl: apkUrl.isEmpty ? _defaultApkUrl(tag) : apkUrl,
+      changelog: (decoded['body'] as String?) ?? '',
+      forceUpdate: false,
+    );
+  }
+
+  /// Newest tag from jsDelivr's package metadata. This endpoint reflects
+  /// the git tags live instead of serving a cached file.
+  Future<UpdateInfo?> _fetchFromTagList() async {
+    final resp = await _client.get(
+      Uri.parse(kTagListUrl),
+      headers: const {'Cache-Control': 'no-cache'},
+    ).timeout(const Duration(seconds: 12));
+    if (resp.statusCode != 200) return null;
+
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! Map) return null;
+
+    final versions = decoded['versions'];
+    if (versions is! List) return null;
+
+    String? newest;
+    for (final raw in versions) {
+      if (raw is! String) continue;
+      final tag = raw.replaceFirst(RegExp(r'^[vV]'), '').trim();
+      // Only plain numeric versions — skip pre-releases / branches.
+      if (!RegExp(r'^\d+(\.\d+)*$').hasMatch(tag)) continue;
+      if (newest == null || _isNewer(tag, newest)) newest = tag;
+    }
+    if (newest == null) return null;
+
+    return UpdateInfo(
+      latestVersion: newest,
+      apkUrl: _defaultApkUrl(newest),
+      changelog: '',
+      forceUpdate: false,
+    );
+  }
+
+  /// Canonical release asset URL for [version].
+  String _defaultApkUrl(String version) =>
+      'https://github.com/$kRepoSlug/releases/download/v$version/'
+      'file-viewer-$version.apk';
 
   /// Download the APK from [info.apkUrl] into the app's cache directory.
   /// Emits progress (0.0 .. 1.0) through [onProgress].
