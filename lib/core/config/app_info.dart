@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.10';
+  static const String version = '1.10.12';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.10';
+  static const String versionNumber = '1.10.12';
 
   /// Internal build number.
-  static const int buildNumber = 22;
+  static const int buildNumber = 24;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -71,12 +71,33 @@ class AppInfo {
   ];
 
   /// Tech stack line shown on the About page.
-  static const String techStack =
-      'Flutter (Dart) · 内核极简 + 功能插件化三层架构';
+  static const String techStack = 'Flutter (Dart) · 内核极简 + 功能插件化三层架构';
 
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.12',
+      date: '2026-11-12',
+      title: '新增全屏沉浸式阅读',
+      changes: [
+        '新增：视图 → 全屏沉浸式阅读，隐藏菜单栏 / 工具栏 / 标签栏 / 状态栏，文档铺满整个屏幕',
+        '同时隐藏 Android 状态栏与导航栏（immersiveSticky），预览顶部工具条也一并隐藏',
+        '退出方式：右上角「退出全屏」浮动按钮、Esc 键或系统返回手势',
+        '桌面端支持 F11 快速切换全屏',
+      ],
+    ),
+    VersionChangeLog(
+      version: '1.10.11',
+      date: '2026-11-11',
+      title: '修复更新检测 + 分享 APK',
+      changes: [
+        '修复：cdn.jsdelivr.net 长期缓存旧 version.json，导致 1.10.9 在 1.10.10 发布后误报"已是最新版本"',
+        '更新检测移除易滞后的 CDN 节点，新增多个镜像，并为请求添加时间戳与禁用缓存头',
+        '新增：帮助 → 分享 APK，通过系统分享面板将当前安装包发送到微信 / QQ / 蓝牙等应用',
+        '分享文件使用当前安装版本号命名，并通过 FileProvider 临时授权接收方读取',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.10',
       date: '2026-11-08',

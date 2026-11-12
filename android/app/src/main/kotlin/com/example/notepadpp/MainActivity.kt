@@ -1,10 +1,12 @@
 package com.example.notepadpp
 
+import android.content.ClipData
 import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -54,6 +56,7 @@ class MainActivity : FlutterActivity() {
                         result.success(pendingPaths.toList())
                         pendingPaths.clear()
                     }
+                    "shareCurrentApk" -> result.success(shareCurrentApk())
                     else -> result.notImplemented()
                 }
             }
@@ -143,6 +146,35 @@ class MainActivity : FlutterActivity() {
             outFile.absolutePath
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /// Copy the installed base APK into the cache and hand it to the system
+    /// share sheet. The existing FileProvider grants the receiving app
+    /// temporary read access without exposing the original file path.
+    private fun shareCurrentApk(): Boolean {
+        return try {
+            val sourceApk = File(applicationInfo.sourceDir)
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName
+            val sharedApk = File(cacheDir, "文件查看器_$versionName.apk")
+            sourceApk.inputStream().use { input ->
+                sharedApk.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            val apkUri = FileProvider.getUriForFile(
+                this, "${packageName}.fileprovider", sharedApk
+            )
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/vnd.android.package-archive"
+                putExtra(Intent.EXTRA_STREAM, apkUri)
+                putExtra(Intent.EXTRA_SUBJECT, sharedApk.name)
+                clipData = ClipData.newUri(contentResolver, sharedApk.name, apkUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "分享 APK"))
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

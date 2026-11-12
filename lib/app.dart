@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'core/config/app_info.dart';
 import 'core/config/app_settings.dart';
 import 'core/config/app_theme.dart';
+import 'core/share/apk_share.dart';
 import 'core/share/share_receiver.dart';
 import 'core/editor_kernel/editor_state.dart';
 import 'core/export/pdf_exporter.dart';
@@ -88,6 +89,11 @@ class _EditorShellState extends State<EditorShell> {
   /// with" sheet (WeChat 分享 → 发送到, file manager 其他应用打开, …).
   StreamSubscription<List<String>>? _shareSub;
 
+  /// Immersive reading mode: hides the app chrome (menu / toolbar / tabs /
+  /// status bar) and the Android system bars so the document fills the
+  /// screen. Exited via the floating button, Esc, or the back gesture.
+  bool _immersive = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,11 +112,31 @@ class _EditorShellState extends State<EditorShell> {
   @override
   void dispose() {
     _shareSub?.cancel();
+    // Never leave the device with hidden system bars after the shell dies.
+    if (_immersive) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     BackgroundUpdateService.instance.removeListener(_onBackgroundUpdate);
     _service.removeListener(_onServiceChanged);
     _service.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// Enter / leave immersive reading mode. Android system bars are hidden
+  /// with [SystemUiMode.immersiveSticky] so they stay hidden until the user
+  /// swipes them back in.
+  Future<void> _toggleImmersive([bool? value]) async {
+    final next = value ?? !_immersive;
+    if (next == _immersive) return;
+    setState(() => _immersive = next);
+    if (next) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    // Keep keyboard shortcuts working after the chrome swap.
+    if (mounted) _focusNode.requestFocus();
   }
 
   void _onServiceChanged() {
@@ -327,7 +353,8 @@ class _EditorShellState extends State<EditorShell> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 14),
-              Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
+              Expanded(
+                  child: Text(message, style: const TextStyle(fontSize: 13))),
             ],
           ),
         ),
@@ -351,6 +378,14 @@ class _EditorShellState extends State<EditorShell> {
     manualCheckForUpdate(context);
   }
 
+  /// Share the installed APK through the system share sheet (帮助 → 分享 APK).
+  Future<void> _onShareApk() async {
+    final opened = await ApkShare.shareCurrentApk();
+    if (mounted && !opened) {
+      _showSnack('无法分享 APK，请确认设备支持系统分享后重试');
+    }
+  }
+
   /// Show a filename input dialog and rename the active file in place.
   void _onRename() {
     final tab = _service.active;
@@ -372,7 +407,9 @@ class _EditorShellState extends State<EditorShell> {
           decoration: const InputDecoration(hintText: '输入新的文件名'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('取消')),
           TextButton(
             onPressed: () async {
               final newName = ctrl.text.trim();
@@ -404,118 +441,194 @@ class _EditorShellState extends State<EditorShell> {
     final active = _service.active;
     return Shortcuts(
       shortcuts: <ShortcutActivator, Intent>{
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true): const _NewIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyO, control: true): const _OpenIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true): const _SaveIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): const _SaveAsIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): const _ReloadIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyW, control: true): const _CloseTabIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyW, control: true, shift: true): const _CloseAllIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyT, control: true, shift: true): const _RestoreClosedIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): const _UndoIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyY, control: true): const _RedoIntent(),
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): const _FormatIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true):
+            const _NewIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyO, control: true):
+            const _OpenIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            const _SaveIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyS,
+            control: true, shift: true): const _SaveAsIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+            const _ReloadIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyW, control: true):
+            const _CloseTabIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyW,
+            control: true, shift: true): const _CloseAllIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyT,
+            control: true, shift: true): const _RestoreClosedIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+            const _UndoIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true):
+            const _RedoIntent(),
+        const SingleActivator(LogicalKeyboardKey.keyF,
+            control: true, shift: true): const _FormatIntent(),
+        // Full-screen (immersive) reading: F11 toggles, Esc leaves.
+        const SingleActivator(LogicalKeyboardKey.f11):
+            const _ToggleImmersiveIntent(),
+        if (_immersive)
+          const SingleActivator(LogicalKeyboardKey.escape):
+              const _ExitImmersiveIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
-          _NewIntent: CallbackAction<_NewIntent>(onInvoke: (_) => _service.newTab()),
-          _OpenIntent: CallbackAction<_OpenIntent>(onInvoke: (_) => _service.openFiles()),
-          _SaveIntent: CallbackAction<_SaveIntent>(onInvoke: (_) => _service.saveActive()),
-          _SaveAsIntent: CallbackAction<_SaveAsIntent>(onInvoke: (_) => _service.saveActiveAs()),
-          _ReloadIntent: CallbackAction<_ReloadIntent>(onInvoke: (_) => _service.reloadActive()),
+          _NewIntent:
+              CallbackAction<_NewIntent>(onInvoke: (_) => _service.newTab()),
+          _OpenIntent: CallbackAction<_OpenIntent>(
+              onInvoke: (_) => _service.openFiles()),
+          _SaveIntent: CallbackAction<_SaveIntent>(
+              onInvoke: (_) => _service.saveActive()),
+          _SaveAsIntent: CallbackAction<_SaveAsIntent>(
+              onInvoke: (_) => _service.saveActiveAs()),
+          _ReloadIntent: CallbackAction<_ReloadIntent>(
+              onInvoke: (_) => _service.reloadActive()),
           _CloseTabIntent: CallbackAction<_CloseTabIntent>(
               onInvoke: (_) => _closeTabWithConfirm(_service.activeIndex)),
-          _CloseAllIntent: CallbackAction<_CloseAllIntent>(onInvoke: (_) => _service.closeAllTabs()),
-          _RestoreClosedIntent:
-              CallbackAction<_RestoreClosedIntent>(onInvoke: (_) => _service.restoreLastClosed()),
-          _UndoIntent: CallbackAction<_UndoIntent>(onInvoke: (_) => _service.undo()),
-          _RedoIntent: CallbackAction<_RedoIntent>(onInvoke: (_) => _service.redo()),
-          _FormatIntent: CallbackAction<_FormatIntent>(onInvoke: (_) => _service.applyFormat()),
+          _CloseAllIntent: CallbackAction<_CloseAllIntent>(
+              onInvoke: (_) => _service.closeAllTabs()),
+          _RestoreClosedIntent: CallbackAction<_RestoreClosedIntent>(
+              onInvoke: (_) => _service.restoreLastClosed()),
+          _UndoIntent:
+              CallbackAction<_UndoIntent>(onInvoke: (_) => _service.undo()),
+          _RedoIntent:
+              CallbackAction<_RedoIntent>(onInvoke: (_) => _service.redo()),
+          _FormatIntent: CallbackAction<_FormatIntent>(
+              onInvoke: (_) => _service.applyFormat()),
+          _ToggleImmersiveIntent:
+              CallbackAction<_ToggleImmersiveIntent>(onInvoke: (_) {
+            _toggleImmersive();
+            return null;
+          }),
+          _ExitImmersiveIntent:
+              CallbackAction<_ExitImmersiveIntent>(onInvoke: (_) {
+            _toggleImmersive(false);
+            return null;
+          }),
         },
-          child: Focus(
+        child: Focus(
           focusNode: _focusNode,
           autofocus: true,
-          child: Scaffold(
-            key: _scaffoldKey,
-            // Drawer-style workspace panel. Only shown when a workspace is
-            // opened; otherwise the editor takes the full width. The user
-            // can toggle it from the toolbar / menu.
-            drawer: _service.workspacePath != null
-                ? _buildWorkspaceDrawer()
-                : null,
-            // SafeArea keeps the menu bar clear of the phone status bar and
-            // the bottom system gesture bar on mobile. On desktop it's a no-op.
-            body: SafeArea(
-              top: true,
-              bottom: true,
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      EditorMenuBar(
-                        service: _service,
-                        onAbout: _openAbout,
-                        settings: widget.settings,
-                        onRename: _onRename,
-                        onFeedback: _onFeedback,
-                        onCheckUpdate: _onCheckUpdate,
-                        onOpenWorkspace: _openWorkspace,
-                        onToggleWorkspace: _toggleWorkspaceDrawer,
-                        onExportPdf: _exportActivePdf,
-                        onCloseTab: () => _closeTabWithConfirm(_service.activeIndex),
-                      ),
-                      _TabStrip(service: _service, onCloseTab: _closeTabWithConfirm),
-                      const Divider(height: 1, color: Color(0xFFE0E0E0)),
-                      Expanded(
-                        child: active == null
-                            ? const _EmptyState()
-                            : active.isPdf
-                                ? PdfViewer(key: ValueKey(active), tab: active)
-                                : active.isWord
-                                    ? WordViewer(
-                                        key: ValueKey(active), tab: active)
-                                    : active.isLargeBinary
-                                        ? LargeBinaryViewer(
-                                            key: ValueKey(active), tab: active)
-                                        : active.isBinary
-                                            ? BinaryViewer(
-                                                key: ValueKey(active),
-                                                tab: active,
-                                                onBytesChanged:
-                                                    _service.updateBinaryBytes,
-                                              )
-                                            : _EditorWithPreview(
-                                                key: ValueKey(active),
-                                                tab: active,
-                                                service: _service,
-                                                onExportPdf: _exportActivePdf,
-                                              ),
-                      ),
-                      if (active != null)
-                        StatusBar(
-                          tab: active,
-                          fileTypeLabel: _service.fileTypeLabelFor(active),
-                          byteSize: _byteSizeOf(active),
-                          onEncodingChanged: (enc) => _service.switchEncoding(enc),
-                          onLanguageChanged: (lang) => _service.setLanguage(lang),
+          // In immersive mode the system back gesture exits full screen
+          // instead of closing the app.
+          child: PopScope(
+            canPop: !_immersive,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop && _immersive) _toggleImmersive(false);
+            },
+            child: Scaffold(
+              key: _scaffoldKey,
+              // Drawer-style workspace panel. Only shown when a workspace is
+              // opened; otherwise the editor takes the full width. The user
+              // can toggle it from the toolbar / menu.
+              drawer: _service.workspacePath != null
+                  ? _buildWorkspaceDrawer()
+                  : null,
+              // SafeArea keeps the menu bar clear of the phone status bar and
+              // the bottom system gesture bar on mobile. On desktop it's a no-op.
+              // Immersive mode intentionally drops both insets.
+              body: SafeArea(
+                top: !_immersive,
+                bottom: !_immersive,
+                child: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        if (!_immersive)
+                          EditorMenuBar(
+                            service: _service,
+                            onAbout: _openAbout,
+                            settings: widget.settings,
+                            onRename: _onRename,
+                            onFeedback: _onFeedback,
+                            onCheckUpdate: _onCheckUpdate,
+                            onShareApk: _onShareApk,
+                            onOpenWorkspace: _openWorkspace,
+                            onToggleWorkspace: _toggleWorkspaceDrawer,
+                            onExportPdf: _exportActivePdf,
+                            onCloseTab: () =>
+                                _closeTabWithConfirm(_service.activeIndex),
+                            immersive: _immersive,
+                            onToggleImmersive: _toggleImmersive,
+                          ),
+                        if (!_immersive)
+                          _TabStrip(
+                              service: _service,
+                              onCloseTab: _closeTabWithConfirm),
+                        if (!_immersive)
+                          const Divider(height: 1, color: Color(0xFFE0E0E0)),
+                        Expanded(
+                          child: active == null
+                              ? const _EmptyState()
+                              : active.isPdf
+                                  ? PdfViewer(
+                                      key: ValueKey(active), tab: active)
+                                  : active.isWord
+                                      ? WordViewer(
+                                          key: ValueKey(active), tab: active)
+                                      : active.isLargeBinary
+                                          ? LargeBinaryViewer(
+                                              key: ValueKey(active),
+                                              tab: active)
+                                          : active.isBinary
+                                              ? BinaryViewer(
+                                                  key: ValueKey(active),
+                                                  tab: active,
+                                                  onBytesChanged: _service
+                                                      .updateBinaryBytes,
+                                                )
+                                              : _EditorWithPreview(
+                                                  key: ValueKey(active),
+                                                  tab: active,
+                                                  service: _service,
+                                                  onExportPdf: _exportActivePdf,
+                                                  immersive: _immersive,
+                                                ),
                         ),
-                    ],
-                  ),
-                  // Floating background-update banner pinned to the bottom.
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 12,
-                    child: const _BackgroundUpdateBanner(),
-                  ),
-                  // Floating voice controls while narration is playing.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 40,
-                    child: Center(child: _VoiceBar(service: _service)),
-                  ),
-                ],
+                        if (!_immersive && active != null)
+                          StatusBar(
+                            tab: active,
+                            fileTypeLabel: _service.fileTypeLabelFor(active),
+                            byteSize: _byteSizeOf(active),
+                            onEncodingChanged: (enc) =>
+                                _service.switchEncoding(enc),
+                            onLanguageChanged: (lang) =>
+                                _service.setLanguage(lang),
+                          ),
+                      ],
+                    ),
+                    // Floating background-update banner pinned to the bottom.
+                    if (!_immersive)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 12,
+                        child: const _BackgroundUpdateBanner(),
+                      ),
+                    // Floating voice controls while narration is playing.
+                    if (!_immersive)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 40,
+                        child: Center(child: _VoiceBar(service: _service)),
+                      ),
+                    // Immersive mode: the only chrome left is a subtle
+                    // "exit" button so the user can always get back.
+                    if (_immersive)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: _ImmersiveExitButton(
+                              onTap: () => _toggleImmersive(false),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -531,7 +644,8 @@ class _EditorShellState extends State<EditorShell> {
     // Live byte length of the current buffer in UTF-8 — accurate for the
     // status bar regardless of whether the file has been saved.
     try {
-      return tab.text.codeUnits.fold<int>(0, (a, c) => a + (c < 0x80 ? 1 : (c < 0x800 ? 2 : 3)));
+      return tab.text.codeUnits
+          .fold<int>(0, (a, c) => a + (c < 0x80 ? 1 : (c < 0x800 ? 2 : 3)));
     } catch (_) {
       return -1;
     }
@@ -552,11 +666,16 @@ class _EditorWithPreview extends StatelessWidget {
     required this.tab,
     required this.service,
     required this.onExportPdf,
+    this.immersive = false,
   });
 
   final EditorTabController tab;
   final EditorService service;
   final VoidCallback onExportPdf;
+
+  /// When true, the compact preview top bar is hidden so the rendered
+  /// document is the only thing on screen.
+  final bool immersive;
 
   @override
   Widget build(BuildContext context) {
@@ -584,16 +703,49 @@ class _EditorWithPreview extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PreviewTopBar(
-              isDark: isDark,
-              title: tab.language == 'mermaid' ? '图表预览' : '预览',
-              onEdit: service.togglePreview,
-              onExportPdf: onExportPdf,
-            ),
+            if (!immersive)
+              _PreviewTopBar(
+                isDark: isDark,
+                title: tab.language == 'mermaid' ? '图表预览' : '预览',
+                onEdit: service.togglePreview,
+                onExportPdf: onExportPdf,
+              ),
             Expanded(child: preview),
           ],
         );
       },
+    );
+  }
+}
+
+/// Floating "exit full screen" control shown in immersive reading mode.
+/// Deliberately small and semi-transparent so it does not distract from the
+/// document, but always reachable (top-right, respecting the notch inset).
+class _ImmersiveExitButton extends StatelessWidget {
+  const _ImmersiveExitButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.45),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.fullscreen_exit, size: 16, color: Colors.white),
+              SizedBox(width: 4),
+              Text('退出全屏', style: TextStyle(fontSize: 11, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -697,7 +849,8 @@ class _VoiceBar extends StatelessWidget {
         final playing = state == VoiceState.speaking;
         final bg = isDark ? const Color(0xF2252526) : const Color(0xF2FFFFFF);
         final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
-        final border = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFD0D0D0);
+        final border =
+            isDark ? const Color(0xFF3A3A3C) : const Color(0xFFD0D0D0);
         return Material(
           color: bg,
           elevation: 4,
@@ -813,10 +966,12 @@ class _TabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inactiveBg = isDark ? const Color(0xFF2D2D30) : const Color(0xFFEAEAEA);
+    final inactiveBg =
+        isDark ? const Color(0xFF2D2D30) : const Color(0xFFEAEAEA);
     final activeBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final border = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFD5D5D5);
-    final inactiveFg = isDark ? const Color(0xFF969696) : const Color(0xFF333333);
+    final inactiveFg =
+        isDark ? const Color(0xFF969696) : const Color(0xFF333333);
     final closeFg = isDark ? const Color(0xFF858585) : const Color(0xFF666666);
 
     return InkWell(
@@ -920,14 +1075,16 @@ class _BackgroundUpdateBanner extends StatelessWidget {
                       else
                         Text(
                           bg.error ?? '后台下载失败',
-                          style: TextStyle(color: Colors.red.shade400, fontSize: 13),
+                          style: TextStyle(
+                              color: Colors.red.shade400, fontSize: 13),
                           overflow: TextOverflow.ellipsis,
                         ),
                       if (bg.state == BackgroundUpdateState.downloading) ...[
                         const SizedBox(height: 6),
                         LinearProgressIndicator(
                           value: bg.progress.clamp(0.0, 1.0),
-                          backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                          backgroundColor:
+                              isDark ? Colors.white12 : Colors.black12,
                           color: accent,
                         ),
                       ],
@@ -1024,4 +1181,12 @@ class _RedoIntent extends Intent {
 
 class _FormatIntent extends Intent {
   const _FormatIntent();
+}
+
+class _ToggleImmersiveIntent extends Intent {
+  const _ToggleImmersiveIntent();
+}
+
+class _ExitImmersiveIntent extends Intent {
+  const _ExitImmersiveIntent();
 }

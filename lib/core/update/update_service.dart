@@ -24,17 +24,16 @@ class UpdateService {
   UpdateService({http.Client? client}) : _client = client ?? http.Client();
 
   /// URLs of the hosted `version.json`, ordered by freshness + reachability
-  /// in China (first-to-try).
+  /// in China. Every source is queried and the highest version wins.
   ///
-  ///   1. fastly.jsdelivr.net — fast CDN mirror, low cache TTL, reachable in CN
-  ///   2. raw.githubusercontent.com — direct GitHub raw (often blocked /
-  ///      timing out in China, 15s timeout)
-  ///   3. cdn.jsdelivr.net — legacy jsDelivr mirror, **long cache TTL** for
-  ///      GitHub raw files; placed last as a true last resort
+  /// `cdn.jsdelivr.net` is intentionally excluded: its `@main` cache can
+  /// keep serving an older manifest for days, which made 1.10.9 report
+  /// "已是最新版本" after 1.10.10 had already been released.
   static const List<String> kUpdateCheckUrls = [
     'https://fastly.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
+    'https://gcore.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
+    'https://testingcf.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
     'https://raw.githubusercontent.com/danqingpro/file-viewer/main/version.json',
-    'https://cdn.jsdelivr.net/gh/danqingpro/file-viewer@main/version.json',
   ];
 
   final http.Client _client;
@@ -81,9 +80,16 @@ class UpdateService {
     for (final url in kUpdateCheckUrls) {
       attempted++;
       try {
-        final resp = await _client
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 12));
+        final uri = Uri.parse(url).replace(queryParameters: {
+          '_': DateTime.now().millisecondsSinceEpoch.toString(),
+        });
+        final resp = await _client.get(
+          uri,
+          headers: const {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+          },
+        ).timeout(const Duration(seconds: 12));
         if (resp.statusCode != 200) continue;
 
         final json = _parseJson(resp.body);
@@ -106,8 +112,7 @@ class UpdateService {
 
     if (succeeded == 0) {
       // Every mirror failed — network outage or all mirrors unreachable.
-      throw UpdateFetchException(
-        '无法连接到更新服务器（已尝试 $attempted 个镜像）');
+      throw UpdateFetchException('无法连接到更新服务器（已尝试 $attempted 个镜像）');
     }
 
     if (best == null) return null;
@@ -148,8 +153,7 @@ class UpdateService {
 
       // Server honours Range: continues from `start`.
       // Server ignores Range (200): restart from scratch.
-      final bool resumed =
-          response.statusCode == 206;
+      final bool resumed = response.statusCode == 206;
       if (response.statusCode == 200) {
         // Server ignored the Range header — delete any partial file and
         // write from the beginning.
@@ -177,7 +181,8 @@ class UpdateService {
       final total = expectedTotal ?? response.contentLength ?? 0;
 
       // Append mode for resumed downloads, write mode for fresh.
-      final sink = file.openWrite(mode: resumed ? FileMode.append : FileMode.write);
+      final sink =
+          file.openWrite(mode: resumed ? FileMode.append : FileMode.write);
       int received = start;
       if (total > 0) {
         onProgress(received / total);
@@ -238,10 +243,7 @@ class UpdateService {
   }
 
   List<int> _parseVersion(String v) {
-    return v
-        .split('.')
-        .map((s) => int.tryParse(s) ?? 0)
-        .toList();
+    return v.split('.').map((s) => int.tryParse(s) ?? 0).toList();
   }
 
   void dispose() => _client.close();

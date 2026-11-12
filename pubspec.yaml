@@ -1,7 +1,7 @@
 name: notepadpp
 description: "文件查看器 - 跨平台插件式文本/代码查看与编辑器 (Flutter)."
 publish_to: 'none'
-version: 1.10.10+22
+version: 1.10.12+24
 
 environment:
   sdk: ^3.6.2

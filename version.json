@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.10",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.10/file-viewer-1.10.10.apk",
-  "changelog": "1.10.10：支持「打开方式 / 分享到」直接打开文件。在微信 / QQ / 文件管理器中选择「用其他应用打开」或「分享 → 发送到」时，本应用出现在候选列表中，选择后自动打开对应文件。支持单文件和多文件分享，content:// 共享文件自动复制到缓存目录后打开。",
+  "latestVersion": "1.10.12",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.12/file-viewer-1.10.12.apk",
+  "changelog": "1.10.12：新增全屏沉浸式阅读（视图 → 全屏沉浸式阅读 / F11），隐藏所有工具栏与系统状态栏，文档铺满屏幕；支持分享 APK 给他人（帮助 → 分享 APK）；修复 CDN 缓存导致检查更新误报「已是最新版本」的问题。",
   "forceUpdate": false
 }

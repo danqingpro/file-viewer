@@ -25,10 +25,13 @@ class EditorMenuBar extends StatelessWidget {
     this.onRename,
     this.onFeedback,
     this.onCheckUpdate,
+    this.onShareApk,
     this.onOpenWorkspace,
     this.onToggleWorkspace,
     this.onCloseTab,
     this.onExportPdf,
+    this.immersive = false,
+    this.onToggleImmersive,
   });
 
   final EditorService service;
@@ -45,6 +48,9 @@ class EditorMenuBar extends StatelessWidget {
   /// Triggered by "帮助 → 检查更新".
   final VoidCallback? onCheckUpdate;
 
+  /// Triggered by "帮助 → 分享 APK".
+  final VoidCallback? onShareApk;
+
   /// Triggered by "文件 → 打开文件夹作为工作区…". Wraps
   /// [EditorService.openWorkspace] so the shell can auto-open the drawer.
   final VoidCallback? onOpenWorkspace;
@@ -60,6 +66,12 @@ class EditorMenuBar extends StatelessWidget {
   /// Triggered by "文件 → 导出 PDF…". Only meaningful for Markdown /
   /// Mermaid tabs; the shell performs the actual render + file save.
   final VoidCallback? onExportPdf;
+
+  /// Whether immersive (full-screen) reading mode is currently active.
+  final bool immersive;
+
+  /// Triggered by "视图 → 全屏沉浸式阅读".
+  final VoidCallback? onToggleImmersive;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +148,8 @@ class EditorMenuBar extends StatelessWidget {
                 height: rowHeight,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   children: [
                     // Preview toggle moved to the FRONT of the toolbar: on
                     // landscape phones the later buttons scroll off-screen,
@@ -152,8 +165,10 @@ class EditorMenuBar extends StatelessWidget {
                         mode,
                         isMobile,
                       ),
-                    _toolButton(context, Icons.note_add_outlined, '新建', service.newTab, mode, isMobile),
-                    _toolButton(context, Icons.folder_open_outlined, '打开', service.openFiles, mode, isMobile),
+                    _toolButton(context, Icons.note_add_outlined, '新建',
+                        service.newTab, mode, isMobile),
+                    _toolButton(context, Icons.folder_open_outlined, '打开',
+                        service.openFiles, mode, isMobile),
                     // Workspace toggle button — only visible when a workspace is loaded.
                     if (service.workspacePath != null) ...[
                       _toolButton(
@@ -165,13 +180,18 @@ class EditorMenuBar extends StatelessWidget {
                         isMobile,
                       ),
                     ],
-                    _toolButton(context, Icons.save_outlined, '保存', service.saveActive, mode, isMobile),
-                    _toolButton(context, Icons.save_alt_outlined, '另存为', service.saveActiveAs, mode, isMobile),
+                    _toolButton(context, Icons.save_outlined, '保存',
+                        service.saveActive, mode, isMobile),
+                    _toolButton(context, Icons.save_alt_outlined, '另存为',
+                        service.saveActiveAs, mode, isMobile),
                     _divider(isDark, isMobile),
-                    _toolButton(context, Icons.undo_outlined, '撤销', service.undo, mode, isMobile),
-                    _toolButton(context, Icons.redo_outlined, '重做', service.redo, mode, isMobile),
+                    _toolButton(context, Icons.undo_outlined, '撤销',
+                        service.undo, mode, isMobile),
+                    _toolButton(context, Icons.redo_outlined, '重做',
+                        service.redo, mode, isMobile),
                     _divider(isDark, isMobile),
-                    _toolButton(context, Icons.format_align_left_outlined, '格式化', service.applyFormat, mode, isMobile),
+                    _toolButton(context, Icons.format_align_left_outlined,
+                        '格式化', service.applyFormat, mode, isMobile),
                     // Voice button is a toggle: speak when idle, stop when
                     // already narrating. A floating voice bar also appears
                     // while playing (see app.dart).
@@ -182,7 +202,9 @@ class EditorMenuBar extends StatelessWidget {
                             voiceState == VoiceState.paused;
                         return _toolButton(
                           context,
-                          busy ? Icons.stop_circle_outlined : Icons.record_voice_over_outlined,
+                          busy
+                              ? Icons.stop_circle_outlined
+                              : Icons.record_voice_over_outlined,
                           busy ? '停止播报' : '语音播报',
                           service.toggleVoice,
                           mode,
@@ -192,7 +214,8 @@ class EditorMenuBar extends StatelessWidget {
                     ),
                     _divider(isDark, isMobile),
                     _themeButton(context, mode, isMobile),
-                    _toolButton(context, Icons.info_outline, '关于', onAbout, mode, isMobile),
+                    _toolButton(context, Icons.info_outline, '关于', onAbout,
+                        mode, isMobile),
                   ],
                 ),
               );
@@ -209,17 +232,23 @@ class EditorMenuBar extends StatelessWidget {
   List<PopupMenuEntry<Object>> _fileItems() {
     final recent = service.recentFiles;
     return [
-      _item('新建文件', Icons.note_add_outlined, service.newTab, shortcut: 'Ctrl+N'),
-      _item('打开文件…', Icons.folder_open_outlined, service.openFiles, shortcut: 'Ctrl+O'),
+      _item('新建文件', Icons.note_add_outlined, service.newTab,
+          shortcut: 'Ctrl+N'),
+      _item('打开文件…', Icons.folder_open_outlined, service.openFiles,
+          shortcut: 'Ctrl+O'),
       _item('打开文件夹作为工作区…', Icons.folder_shared_outlined,
           onOpenWorkspace ?? service.openWorkspace),
       const PopupMenuDivider(),
-      _item('重新读取文件', Icons.refresh_outlined, service.reloadActive, shortcut: 'Ctrl+R'),
+      _item('重新读取文件', Icons.refresh_outlined, service.reloadActive,
+          shortcut: 'Ctrl+R'),
       _item('保存', Icons.save_outlined, service.saveActive, shortcut: 'Ctrl+S'),
-      _item('另存为…', Icons.save_alt_outlined, service.saveActiveAs, shortcut: 'Ctrl+Shift+S'),
+      _item('另存为…', Icons.save_alt_outlined, service.saveActiveAs,
+          shortcut: 'Ctrl+Shift+S'),
       _item('拷贝另存为…', Icons.content_copy_outlined, service.saveActiveCopy),
-      _item('全部保存', Icons.save_alt_outlined, service.saveAll, shortcut: 'Ctrl+Shift+L'),
-      _item('重命名…', Icons.drive_file_rename_outline, onRename ?? () {}, shortcut: 'Ctrl+Shift+S'),
+      _item('全部保存', Icons.save_alt_outlined, service.saveAll,
+          shortcut: 'Ctrl+Shift+L'),
+      _item('重命名…', Icons.drive_file_rename_outline, onRename ?? () {},
+          shortcut: 'Ctrl+Shift+S'),
       const PopupMenuDivider(),
       // PDF export — only for Markdown / Mermaid tabs.
       if (service.active?.supportsPreview ?? false) ...[
@@ -229,7 +258,8 @@ class EditorMenuBar extends StatelessWidget {
       _item('关闭标签页', Icons.close_outlined,
           onCloseTab ?? () => service.closeTab(service.activeIndex),
           shortcut: 'Ctrl+W'),
-      _item('全部关闭', Icons.close_fullscreen_outlined, service.closeAllTabs, shortcut: 'Ctrl+Shift+W'),
+      _item('全部关闭', Icons.close_fullscreen_outlined, service.closeAllTabs,
+          shortcut: 'Ctrl+Shift+W'),
       _item('从磁盘删除', Icons.delete_outline, service.deleteActiveFromDisk),
       const PopupMenuDivider(),
       _item('恢复最近一个关闭的文件', Icons.restore_outlined, service.restoreLastClosed,
@@ -246,7 +276,8 @@ class EditorMenuBar extends StatelessWidget {
         _item('清空最近的文件列表', Icons.delete_sweep_outlined, service.clearRecent),
       ],
       const PopupMenuDivider(),
-      _item('退出', Icons.exit_to_app_outlined, service.exitApp, shortcut: 'Alt+F4'),
+      _item('退出', Icons.exit_to_app_outlined, service.exitApp,
+          shortcut: 'Alt+F4'),
     ];
   }
 
@@ -259,15 +290,26 @@ class EditorMenuBar extends StatelessWidget {
         _item('撤销', Icons.undo_outlined, service.undo, shortcut: 'Ctrl+Z'),
         _item('重做', Icons.redo_outlined, service.redo, shortcut: 'Ctrl+Y'),
         const PopupMenuDivider(),
-        _item('剪切', Icons.content_cut_outlined, service.cut, shortcut: 'Ctrl+X'),
+        _item('剪切', Icons.content_cut_outlined, service.cut,
+            shortcut: 'Ctrl+X'),
         _item('复制', Icons.copy_outlined, service.copy, shortcut: 'Ctrl+C'),
         _item('粘贴', Icons.paste_outlined, service.paste, shortcut: 'Ctrl+V'),
-        _item('全选', Icons.select_all_outlined, service.selectAll, shortcut: 'Ctrl+A'),
+        _item('全选', Icons.select_all_outlined, service.selectAll,
+            shortcut: 'Ctrl+A'),
       ];
 
   List<PopupMenuEntry<Object>> _viewItems() {
     final hasWorkspace = service.workspacePath != null;
     return [
+      // Immersive reading: hides the menu / toolbar / tabs / status bar and
+      // the Android system bars. F11 also toggles it.
+      _checkItem(
+        '全屏沉浸式阅读 (F11)',
+        Icons.fullscreen,
+        immersive,
+        onToggleImmersive ?? () {},
+      ),
+      const PopupMenuDivider(),
       // Workspace drawer toggle (only when a workspace is loaded).
       if (hasWorkspace) ...[
         _item('切换工作区面板', Icons.folder_shared_outlined,
@@ -284,26 +326,44 @@ class EditorMenuBar extends StatelessWidget {
         ),
       const PopupMenuDivider(),
       _sectionHeader('主题'),
-      _checkItem('浅色', Icons.light_mode_outlined, settings.themeMode == ThemeMode.light,
+      _checkItem(
+          '浅色',
+          Icons.light_mode_outlined,
+          settings.themeMode == ThemeMode.light,
           () => settings.setThemeMode(ThemeMode.light)),
-      _checkItem('深色', Icons.dark_mode_outlined, settings.themeMode == ThemeMode.dark,
+      _checkItem(
+          '深色',
+          Icons.dark_mode_outlined,
+          settings.themeMode == ThemeMode.dark,
           () => settings.setThemeMode(ThemeMode.dark)),
-      _checkItem('跟随系统', Icons.brightness_auto_outlined, settings.themeMode == ThemeMode.system,
+      _checkItem(
+          '跟随系统',
+          Icons.brightness_auto_outlined,
+          settings.themeMode == ThemeMode.system,
           () => settings.setThemeMode(ThemeMode.system)),
       const PopupMenuDivider(),
       _sectionHeader('工具栏显示'),
-      _checkItem('仅图标', Icons.crop_original_outlined, settings.toolbarMode == ToolbarDisplayMode.iconOnly,
+      _checkItem(
+          '仅图标',
+          Icons.crop_original_outlined,
+          settings.toolbarMode == ToolbarDisplayMode.iconOnly,
           () => settings.setToolbarMode(ToolbarDisplayMode.iconOnly)),
-      _checkItem('仅文字', Icons.text_fields, settings.toolbarMode == ToolbarDisplayMode.textOnly,
+      _checkItem(
+          '仅文字',
+          Icons.text_fields,
+          settings.toolbarMode == ToolbarDisplayMode.textOnly,
           () => settings.setToolbarMode(ToolbarDisplayMode.textOnly)),
-      _checkItem('图标 + 文字', Icons.view_module_outlined,
+      _checkItem(
+          '图标 + 文字',
+          Icons.view_module_outlined,
           settings.toolbarMode == ToolbarDisplayMode.iconAndText,
           () => settings.setToolbarMode(ToolbarDisplayMode.iconAndText)),
     ];
   }
 
   List<PopupMenuEntry<Object>> _formatItems() => [
-        _item('一键格式化当前文件', Icons.format_align_left_outlined, service.applyFormat,
+        _item(
+            '一键格式化当前文件', Icons.format_align_left_outlined, service.applyFormat,
             shortcut: 'Ctrl+Shift+F'),
       ];
 
@@ -312,7 +372,8 @@ class EditorMenuBar extends StatelessWidget {
     return [
       _sectionHeader('转为编码（重新解码文件）'),
       for (final enc in kEncodingOptions)
-        _checkItem(enc, Icons.text_fields, current == enc, () => service.switchEncoding(enc)),
+        _checkItem(enc, Icons.text_fields, current == enc,
+            () => service.switchEncoding(enc)),
     ];
   }
 
@@ -321,12 +382,14 @@ class EditorMenuBar extends StatelessWidget {
     return [
       _sectionHeader('切换语法高亮语言'),
       for (final lang in kLanguageOptions)
-        _checkItem(_languageLabel(lang), Icons.code, current == lang, () => service.setLanguage(lang)),
+        _checkItem(_languageLabel(lang), Icons.code, current == lang,
+            () => service.setLanguage(lang)),
     ];
   }
 
   List<PopupMenuEntry<Object>> _voiceItems() => [
-        _item('播报选中文本', Icons.record_voice_over_outlined, service.speakSelected),
+        _item(
+            '播报选中文本', Icons.record_voice_over_outlined, service.speakSelected),
         _item('播报全文', Icons.campaign_outlined, service.speakAll),
         const PopupMenuDivider(),
         _item('暂停', Icons.pause_outlined, service.pauseVoice),
@@ -336,6 +399,7 @@ class EditorMenuBar extends StatelessWidget {
 
   List<PopupMenuEntry<Object>> _helpItems() => [
         _item('检查更新', Icons.system_update_alt_outlined, onCheckUpdate ?? () {}),
+        _item('分享 APK', Icons.share_outlined, onShareApk ?? () {}),
         _item('意见反馈', Icons.feedback_outlined, onFeedback ?? () {}),
         const PopupMenuDivider(),
         _item('关于 ${AppInfo.name}', Icons.info_outline, onAbout),
@@ -352,7 +416,8 @@ class EditorMenuBar extends StatelessWidget {
 
   // ---- Widget helpers ----------------------------------------------------
 
-  Widget _menu(BuildContext context, String label, List<PopupMenuEntry<Object>> items, double fontSize) {
+  Widget _menu(BuildContext context, String label,
+      List<PopupMenuEntry<Object>> items, double fontSize) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = isDark ? Colors.white70 : Colors.black87;
     return PopupMenuButton<Object>(
@@ -384,7 +449,10 @@ class EditorMenuBar extends StatelessWidget {
           Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
           if (shortcut != null)
             Text(shortcut,
-                style: const TextStyle(fontSize: 11, color: Colors.black45, fontFamily: 'monospace')),
+                style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.black45,
+                    fontFamily: 'monospace')),
         ],
       ),
       onTap: onTap,
@@ -402,7 +470,9 @@ class EditorMenuBar extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            checked ? Icons.check_box_outlined : Icons.check_box_outline_blank_outlined,
+            checked
+                ? Icons.check_box_outlined
+                : Icons.check_box_outline_blank_outlined,
             size: 16,
             color: checked ? const Color(0xFF007ACC) : Colors.black38,
           ),
@@ -422,7 +492,8 @@ class EditorMenuBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Text(
         title,
-        style: const TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+            fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -467,14 +538,20 @@ class EditorMenuBar extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            p.enabled ? Icons.check_box_outlined : Icons.check_box_outline_blank_outlined,
+            p.enabled
+                ? Icons.check_box_outlined
+                : Icons.check_box_outline_blank_outlined,
             size: 16,
             color: p.enabled ? const Color(0xFF0A8754) : Colors.black45,
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(p.displayName, style: const TextStyle(fontSize: 13))),
+          Expanded(
+              child: Text(p.displayName, style: const TextStyle(fontSize: 13))),
           Text('v${p.version}',
-              style: const TextStyle(fontSize: 11, color: Colors.black45, fontFamily: 'monospace')),
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.black45,
+                  fontFamily: 'monospace')),
         ],
       ),
       onTap: () {
@@ -513,7 +590,8 @@ class EditorMenuBar extends StatelessWidget {
         child = Icon(icon, size: iconSize, color: fg);
         break;
       case ToolbarDisplayMode.textOnly:
-        child = Text(label, style: TextStyle(fontSize: textFontSize, color: fg));
+        child =
+            Text(label, style: TextStyle(fontSize: textFontSize, color: fg));
         break;
       case ToolbarDisplayMode.iconAndText:
         child = Column(
@@ -552,7 +630,8 @@ class EditorMenuBar extends StatelessWidget {
   /// Theme toggle button. Cycles light -> dark -> system on click.
   /// The icon reflects the *current* mode so users always know which state
   /// they are in without opening the menu.
-  Widget _themeButton(BuildContext context, ToolbarDisplayMode mode, bool isMobile) {
+  Widget _themeButton(
+      BuildContext context, ToolbarDisplayMode mode, bool isMobile) {
     final current = settings.themeMode;
     final (icon, label) = switch (current) {
       ThemeMode.light => (Icons.light_mode_outlined, '主题：浅色'),
