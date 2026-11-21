@@ -697,7 +697,7 @@ class _EditorWithPreview extends StatelessWidget {
 
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final Widget preview = tab.language == 'mermaid'
-            ? MermaidView(source: tab.text, dark: isDark)
+            ? MermaidDiagramViewer(source: tab.text, dark: isDark)
             : MarkdownPreview(data: tab.text);
 
         return Column(

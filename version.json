@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.14",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.14/file-viewer-1.10.14.apk",
-  "changelog": "1.10.14：修复「检查更新」误报已是最新版本。新增 GitHub Releases 版本清单、GitHub Releases API、jsDelivr 标签列表三个不受 CDN 旧缓存影响的权威更新源，并保证任一镜像失效时仍会尝试其他来源。含全屏沉浸式阅读与分享 APK 功能。",
+  "latestVersion": "1.10.15",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.15/file-viewer-1.10.15.apk",
+  "changelog": "1.10.15：优化 Mermaid 预览——全屏查看器新增「图表 / 源码」切换可看源代码；放大后可拖动平移、1× 可滚动；修复渲染卡顿与加载圈长时间不消失（mermaid 单次初始化、JS ready 兜底、相同源码不重复渲染）。",
   "forceUpdate": false
 }

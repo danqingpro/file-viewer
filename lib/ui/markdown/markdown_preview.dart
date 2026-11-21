@@ -151,16 +151,26 @@ class _MarkdownPreviewState extends State<MarkdownPreview> {
     final codeBg = isDark ? const Color(0xFF2D2D30) : const Color(0xFFF6F8FA);
     final quoteFg = isDark ? const Color(0xFFB0B0B0) : const Color(0xFF57606A);
     final quoteBar = isDark ? const Color(0xFF4EA8FF) : const Color(0xFFD0D7DE);
-    final tableBorder = isDark ? const Color(0xFF444444) : const Color(0xFFD0D7DE);
+    final tableBorder =
+        isDark ? const Color(0xFF444444) : const Color(0xFFD0D7DE);
 
     return MarkdownStyleSheet.fromTheme(theme).copyWith(
       p: TextStyle(color: fg, fontSize: 14, height: 1.55),
-      h1: TextStyle(color: fg, fontSize: 22, fontWeight: FontWeight.w700, height: 1.6),
-      h2: TextStyle(color: fg, fontSize: 19, fontWeight: FontWeight.w700, height: 1.6),
-      h3: TextStyle(color: fg, fontSize: 16.5, fontWeight: FontWeight.w700, height: 1.6),
-      h4: TextStyle(color: fg, fontSize: 15, fontWeight: FontWeight.w600, height: 1.6),
-      h5: TextStyle(color: fg, fontSize: 14, fontWeight: FontWeight.w600, height: 1.6),
-      h6: TextStyle(color: muted, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.6),
+      h1: TextStyle(
+          color: fg, fontSize: 22, fontWeight: FontWeight.w700, height: 1.6),
+      h2: TextStyle(
+          color: fg, fontSize: 19, fontWeight: FontWeight.w700, height: 1.6),
+      h3: TextStyle(
+          color: fg, fontSize: 16.5, fontWeight: FontWeight.w700, height: 1.6),
+      h4: TextStyle(
+          color: fg, fontSize: 15, fontWeight: FontWeight.w600, height: 1.6),
+      h5: TextStyle(
+          color: fg, fontSize: 14, fontWeight: FontWeight.w600, height: 1.6),
+      h6: TextStyle(
+          color: muted,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          height: 1.6),
       a: TextStyle(color: accent, decoration: TextDecoration.underline),
       strong: TextStyle(color: fg, fontWeight: FontWeight.w700),
       em: TextStyle(color: fg, fontStyle: FontStyle.italic),
@@ -181,7 +191,8 @@ class _MarkdownPreviewState extends State<MarkdownPreview> {
         border: Border(left: BorderSide(color: quoteBar, width: 3)),
       ),
       listBullet: TextStyle(color: fg, fontSize: 14, height: 1.55),
-      tableHead: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13),
+      tableHead:
+          TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13),
       tableBody: TextStyle(color: fg, fontSize: 13),
       tableBorder: TableBorder.all(color: tableBorder, width: 0.5),
       tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -322,7 +333,8 @@ class _OutlinePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xFF252526) : Colors.white;
     final fg = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1F1F1F);
-    final width = (MediaQuery.of(context).size.width * 0.78).clamp(200.0, 320.0);
+    final width =
+        (MediaQuery.of(context).size.width * 0.78).clamp(200.0, 320.0);
 
     return Material(
       color: bg,
@@ -338,7 +350,8 @@ class _OutlinePanel extends StatelessWidget {
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    Icon(Icons.toc, size: 16,
+                    Icon(Icons.toc,
+                        size: 16,
                         color: isDark ? Colors.white70 : Colors.black54),
                     const SizedBox(width: 8),
                     Expanded(
@@ -353,7 +366,8 @@ class _OutlinePanel extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onClose,
-                      icon: Icon(Icons.close, size: 18,
+                      icon: Icon(Icons.close,
+                          size: 18,
                           color: isDark ? Colors.white70 : Colors.black54),
                     ),
                   ],
@@ -361,7 +375,8 @@ class _OutlinePanel extends StatelessWidget {
               ),
               Divider(
                 height: 1,
-                color: isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE0E0E0),
+                color:
+                    isDark ? const Color(0xFF3A3A3C) : const Color(0xFFE0E0E0),
               ),
               Expanded(
                 child: ListView.builder(
@@ -384,7 +399,11 @@ class _OutlinePanel extends StatelessWidget {
                             height: 1.35,
                             fontWeight:
                                 isMajor ? FontWeight.w600 : FontWeight.w400,
-                            color: isMajor ? fg : (isDark ? const Color(0xFFB8B8B8) : const Color(0xFF555555)),
+                            color: isMajor
+                                ? fg
+                                : (isDark
+                                    ? const Color(0xFFB8B8B8)
+                                    : const Color(0xFF555555)),
                           ),
                         ),
                       ),
@@ -513,22 +532,76 @@ class _MermaidBlock extends StatelessWidget {
 }
 
 /// Full-screen mermaid diagram viewer (opened from an inline preview card).
-class _MermaidFullScreen extends StatelessWidget {
+///
+/// Features:
+///   * 图表 / 源码 toggle — solves "只能预览，不能查看代码"
+///   * scale-aware gesture handling: at 1× the WebView scrolls natively so
+///     tall/wide diagrams are reachable; once the user pinches in,
+///     InteractiveViewer takes over panning (fixes "放大后不能滑动看")
+///   * the diagram WebView is kept alive in an IndexedStack so switching to
+///     the source view and back does not reload / re-render the chart
+class _MermaidFullScreen extends StatefulWidget {
   const _MermaidFullScreen({required this.source});
 
   final String source;
 
   @override
+  State<_MermaidFullScreen> createState() => _MermaidFullScreenState();
+}
+
+class _MermaidFullScreenState extends State<_MermaidFullScreen> {
+  bool _showCode = false;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mermaid 图表')),
-      body: InteractiveViewer(
-        maxScale: 6,
-        minScale: 0.4,
-        child: SizedBox.expand(
-          child: MermaidView(source: source, dark: isDark),
+
+    final diagram = MermaidDiagramViewer(
+      source: widget.source,
+      dark: isDark,
+    );
+
+    final codeView = Container(
+      color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFFF8F8F8),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: SelectableText(
+          widget.source,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            height: 1.5,
+            color: isDark ? const Color(0xFFE0E0E0) : const Color(0xFF24292F),
+          ),
         ),
+      ),
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mermaid 图表'),
+        actions: [
+          ToggleButtons(
+            isSelected: [!_showCode, _showCode],
+            onPressed: (i) => setState(() => _showCode = i == 1),
+            borderRadius: BorderRadius.circular(8),
+            constraints: const BoxConstraints(minWidth: 52, minHeight: 34),
+            textStyle: const TextStyle(fontSize: 13),
+            children: const [
+              Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('图表')),
+              Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('源码')),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: IndexedStack(
+        index: _showCode ? 1 : 0,
+        children: [diagram, codeView],
       ),
     );
   }

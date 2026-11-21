@@ -39,8 +39,14 @@ class _MermaidViewState extends State<MermaidView> {
   String? _error;
 
   /// Debounce for source changes while the user types: mermaid.render is
-  /// comparatively heavy, so re-render at most ~2.5×/second during edits.
+  /// comparatively heavy, so re-render at most ~2×/second during edits.
   Timer? _debounce;
+
+  /// Last (source, theme) actually pushed to the WebView. Lets us skip a
+  /// redundant re-render when the parent rebuilds with identical content
+  /// (e.g. the live-preview AnimatedBuilder fires on every cursor move).
+  String? _lastSource;
+  bool? _lastDark;
 
   @override
   void initState() {
@@ -54,7 +60,14 @@ class _MermaidViewState extends State<MermaidView> {
         onMessageReceived: (msg) {
           try {
             final data = jsonDecode(msg.message) as Map<String, dynamic>;
-            if (data['status'] == 'ok') {
+            final status = data['status'];
+            if (status == 'ready') {
+              // Page shell is up — render now if onPageFinished hasn't.
+              if (!_pageReady) {
+                _pageReady = true;
+                _render(immediate: true);
+              }
+            } else if (status == 'ok') {
               if (_error != null && mounted) setState(() => _error = null);
             } else {
               final m = data['message']?.toString() ?? '渲染失败';
@@ -100,12 +113,18 @@ class _MermaidViewState extends State<MermaidView> {
     if (immediate) {
       _doRender();
     } else {
-      _debounce = Timer(const Duration(milliseconds: 400), _doRender);
+      _debounce = Timer(const Duration(milliseconds: 500), _doRender);
     }
   }
 
   void _doRender() {
     if (!_pageReady || !mounted) return;
+    // Skip work entirely when neither the source nor the theme changed since
+    // the last render — kills the "keeps refreshing" loop from parent rebuilds.
+    if (_lastSource == widget.source && _lastDark == widget.dark) return;
+    _lastSource = widget.source;
+    _lastDark = widget.dark;
+
     final theme = widget.dark ? 'dark' : 'default';
     final code = jsonEncode(widget.source);
     _controller.runJavaScript('window.renderMermaid($code, "$theme")');
@@ -153,6 +172,72 @@ class _MermaidViewState extends State<MermaidView> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Scale-aware wrapper around [MermaidView] for surfaces where the diagram
+/// is the primary content (the editor's preview pane and the full-screen
+/// viewer).
+///
+/// Gesture strategy:
+///   * at 1× [InteractiveViewer.panEnabled] is false, so one-finger drags
+///     fall through to the WebView and the diagram scrolls natively (tall /
+///     wide diagrams stay reachable) — this is what was broken before
+///   * once the user pinch-zooms in, panning is handed to [InteractiveViewer]
+///     so the zoomed image can be dragged around
+class MermaidDiagramViewer extends StatefulWidget {
+  const MermaidDiagramViewer({
+    super.key,
+    required this.source,
+    required this.dark,
+    this.onError,
+  });
+
+  final String source;
+  final bool dark;
+  final ValueChanged<String>? onError;
+
+  @override
+  State<MermaidDiagramViewer> createState() => _MermaidDiagramViewerState();
+}
+
+class _MermaidDiagramViewerState extends State<MermaidDiagramViewer> {
+  final TransformationController _transform = TransformationController();
+  double _scale = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _transform.addListener(_onTransform);
+  }
+
+  @override
+  void dispose() {
+    _transform.removeListener(_onTransform);
+    _transform.dispose();
+    super.dispose();
+  }
+
+  void _onTransform() {
+    final s = _transform.value.getMaxScaleOnAxis();
+    if ((s - _scale).abs() > 1e-3) setState(() => _scale = s);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InteractiveViewer(
+      transformationController: _transform,
+      minScale: 0.3,
+      maxScale: 6,
+      panEnabled: _scale > 1.001,
+      child: SizedBox.expand(
+        child: MermaidView(
+          source: widget.source,
+          dark: widget.dark,
+          onError: widget.onError,
+        ),
+      ),
     );
   }
 }

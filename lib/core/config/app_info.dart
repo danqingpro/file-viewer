@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.14';
+  static const String version = '1.10.15';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.14';
+  static const String versionNumber = '1.10.15';
 
   /// Internal build number.
-  static const int buildNumber = 26;
+  static const int buildNumber = 27;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -76,6 +76,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.15',
+      date: '2026-11-21',
+      title: 'Mermaid 预览体验优化',
+      changes: [
+        '新增：全屏 Mermaid 查看器增加「图表 / 源码」切换，可随时查看 Mermaid 源代码',
+        '修复：放大后无法拖动/滑动查看——1× 时 WebView 原生滚动，双指放大后由 InteractiveViewer 接管平移',
+        '优化：渲染卡顿、反复刷新——mermaid 引擎只初始化一次，主题切换才重新初始化',
+        '优化：增加 JS ready 信号兜底，避免加载圈长时间不消失；相同源码不再重复渲染；防抖 400ms→500ms',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.14',
       date: '2026-11-12',

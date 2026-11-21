@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; }
+  /* Diagrams larger than the viewport scroll natively inside the WebView.
+     text-align:center avoids the flex centering + overflow clipping bug. */
   #container {
     width: 100%; height: 100%;
     overflow: auto;
-    display: flex; align-items: center; justify-content: center;
-    box-sizing: border-box; padding: 8px;
+    text-align: center;
+    box-sizing: border-box;
+    padding: 8px;
   }
-  #container svg { max-width: none; }
+  #container svg { display: inline-block; max-width: none; height: auto; }
   #err {
     display: none; color: #d32f2f; font: 12px/1.5 monospace;
-    white-space: pre-wrap; padding: 12px; align-self: flex-start;
+    white-space: pre-wrap; padding: 12px; text-align: left;
   }
 </style>
 <script src="mermaid.min.js"></script>
@@ -23,20 +26,33 @@
 <div id="container"></div>
 <div id="err"></div>
 <script>
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default' });
+  var currentTheme = null;
 
-  // Called from Flutter: renders [code] with the given mermaid theme
-  // ('default' | 'dark') and reports the outcome over MermaidChannel.
+  // Initialize mermaid once at startup. Re-initializing the whole engine on
+  // every render was the main cause of the janky / "keeps refreshing" feel.
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default' });
+  currentTheme = 'default';
+
+  // Called from Flutter: renders [code] with the given theme and reports the
+  // outcome (and the diagram's intrinsic size) over MermaidChannel.
   window.renderMermaid = async function (code, theme) {
     var err = document.getElementById('err');
     var container = document.getElementById('container');
     try {
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });
+      // Only re-initialize when the theme actually changes.
+      if (theme !== currentTheme) {
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });
+        currentTheme = theme;
+      }
       var id = 'mmd-' + Date.now();
       var result = await mermaid.render(id, code);
       container.innerHTML = result.svg;
       err.style.display = 'none';
-      MermaidChannel.postMessage(JSON.stringify({ status: 'ok' }));
+      // Measure the rendered SVG so Flutter could size the pan area if needed.
+      var svg = container.querySelector('svg');
+      var w = svg ? svg.getBoundingClientRect().width : 0;
+      var h = svg ? svg.getBoundingClientRect().height : 0;
+      MermaidChannel.postMessage(JSON.stringify({ status: 'ok', width: w, height: h }));
     } catch (e) {
       container.innerHTML = '';
       err.style.display = 'block';
@@ -45,6 +61,13 @@
       MermaidChannel.postMessage(JSON.stringify({ status: 'error', message: msg }));
     }
   };
+
+  // Backup readiness signal — Flutter's onPageFinished is reliable on most
+  // devices, but a JS 'ready' ping guarantees we render even if it doesn't
+  // fire (which otherwise leaves the spinner up forever).
+  window.addEventListener('load', function () {
+    try { MermaidChannel.postMessage(JSON.stringify({ status: 'ready' })); } catch (e) {}
+  });
 </script>
 </body>
 </html>
