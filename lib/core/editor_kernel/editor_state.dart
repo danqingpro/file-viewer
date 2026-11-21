@@ -57,7 +57,9 @@ class EditorTabController extends ChangeNotifier {
 
   /// Markdown and Mermaid tabs can be rendered as a live preview.
   bool get supportsPreview =>
-      !isBinary && !isLargeBinary && (_language == 'md' || _language == 'mermaid');
+      !isBinary &&
+      !isLargeBinary &&
+      (_language == 'md' || _language == 'mermaid');
 
   void setPreviewEnabled(bool value) {
     if (value == _previewEnabled) return;
@@ -85,6 +87,17 @@ class EditorTabController extends ChangeNotifier {
     if (dot == -1 || dot == p.length - 1) return false;
     final ext = p.substring(dot + 1).toLowerCase();
     return ext == 'doc' || ext == 'docx';
+  }
+
+  /// Whether this tab holds an OFD document (`.ofd`). OFD tabs are stored as
+  /// binary bytes and rendered by the dedicated OfdViewer, which parses the
+  /// package in-app so no external reader is required.
+  bool get isOfd {
+    final p = _path;
+    if (p == null) return false;
+    final dot = p.lastIndexOf('.');
+    if (dot == -1 || dot == p.length - 1) return false;
+    return p.substring(dot + 1).toLowerCase() == 'ofd';
   }
 
   set text(String value) {

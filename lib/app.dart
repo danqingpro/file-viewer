@@ -19,6 +19,7 @@ import 'plugins/voice_plugin/voice_plugin.dart' show VoiceState;
 import 'ui/about/about_page.dart';
 import 'ui/binary_viewer/binary_viewer.dart';
 import 'ui/binary_viewer/large_binary_viewer.dart';
+import 'ui/ofd_viewer/ofd_viewer.dart';
 import 'ui/pdf_viewer/pdf_viewer.dart';
 import 'ui/word_viewer/word_viewer.dart';
 import 'ui/editor_view/editor_view.dart';
@@ -565,24 +566,29 @@ class _EditorShellState extends State<EditorShell> {
                                   : active.isWord
                                       ? WordViewer(
                                           key: ValueKey(active), tab: active)
-                                      : active.isLargeBinary
-                                          ? LargeBinaryViewer(
+                                      : active.isOfd
+                                          ? OfdViewer(
                                               key: ValueKey(active),
                                               tab: active)
-                                          : active.isBinary
-                                              ? BinaryViewer(
+                                          : active.isLargeBinary
+                                              ? LargeBinaryViewer(
                                                   key: ValueKey(active),
-                                                  tab: active,
-                                                  onBytesChanged: _service
-                                                      .updateBinaryBytes,
-                                                )
-                                              : _EditorWithPreview(
-                                                  key: ValueKey(active),
-                                                  tab: active,
-                                                  service: _service,
-                                                  onExportPdf: _exportActivePdf,
-                                                  immersive: _immersive,
-                                                ),
+                                                  tab: active)
+                                              : active.isBinary
+                                                  ? BinaryViewer(
+                                                      key: ValueKey(active),
+                                                      tab: active,
+                                                      onBytesChanged: _service
+                                                          .updateBinaryBytes,
+                                                    )
+                                                  : _EditorWithPreview(
+                                                      key: ValueKey(active),
+                                                      tab: active,
+                                                      service: _service,
+                                                      onExportPdf:
+                                                          _exportActivePdf,
+                                                      immersive: _immersive,
+                                                    ),
                         ),
                         if (!_immersive && active != null)
                           StatusBar(

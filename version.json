@@ -1,6 +1,6 @@
 {
-  "latestVersion": "1.10.15",
-  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.15/file-viewer-1.10.15.apk",
-  "changelog": "1.10.15：优化 Mermaid 预览——全屏查看器新增「图表 / 源码」切换可看源代码；放大后可拖动平移、1× 可滚动；修复渲染卡顿与加载圈长时间不消失（mermaid 单次初始化、JS ready 兜底、相同源码不重复渲染）。",
+  "latestVersion": "1.10.16",
+  "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.16/file-viewer-1.10.16.apk",
+  "changelog": "1.10.16：新增 OFD 版式文档预览——支持 .ofd 打开与多页浏览，应用内离线渲染文字、矢量线条与嵌入图片，无需安装 WPS；支持双指缩放与放大后拖动平移；无法解析时可一键用系统应用打开。",
   "forceUpdate": false
 }

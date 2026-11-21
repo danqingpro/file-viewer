@@ -19,6 +19,7 @@ import 'plugins/word_viewer_plugin/word_viewer_plugin.dart';
 import 'plugins/file_type_plugin/file_type_plugin.dart';
 import 'plugins/format_plugin/format_plugin.dart';
 import 'plugins/highlight_plugin/highlight_plugin.dart';
+import 'plugins/ofd_viewer_plugin/ofd_viewer_plugin.dart';
 import 'plugins/voice_plugin/voice_plugin.dart';
 import 'ui/editor_view/highlighting_controller.dart';
 
@@ -37,6 +38,7 @@ class EditorService extends ChangeNotifier {
     _plugins.register(BinaryViewerPlugin());
     _plugins.register(PdfViewerPlugin());
     _plugins.register(WordViewerPlugin());
+    _plugins.register(OfdViewerPlugin());
     _fileKernel = FileKernel(_bus);
     _fileType = _plugins.get<FileTypePlugin>('file_type_plugin')!;
     _highlight = _plugins.get<HighlightPlugin>('highlight_plugin')!;
@@ -45,6 +47,7 @@ class EditorService extends ChangeNotifier {
     _binary = _plugins.get<BinaryViewerPlugin>('binary_viewer_plugin')!;
     _pdf = _plugins.get<PdfViewerPlugin>('pdf_viewer_plugin')!;
     _word = _plugins.get<WordViewerPlugin>('word_viewer_plugin')!;
+    _ofd = _plugins.get<OfdViewerPlugin>('ofd_viewer_plugin')!;
     newTab();
   }
 
@@ -58,6 +61,7 @@ class EditorService extends ChangeNotifier {
   late final BinaryViewerPlugin _binary;
   late final PdfViewerPlugin _pdf;
   late final WordViewerPlugin _word;
+  late final OfdViewerPlugin _ofd;
 
   final List<EditorTabController> _tabs = [];
   int _active = 0;
@@ -152,17 +156,47 @@ class EditorService extends ChangeNotifier {
   // ---- File operations ----------------------------------------------------
 
   static const _extensions = [
-    'txt', 'md', 'markdown', 'mmd', 'mermaid',
-    'cpp', 'cc', 'cxx', 'c', 'h', 'hpp', 'hh', 'hxx',
-    'json', 'jsonc',
-    'xml', 'svg', 'xhtml', 'xsd', 'xsl',
-    'html', 'htm', 'shtml',
-    'css', 'scss', 'less',
-    'js', 'jsx', 'mjs', 'cjs',
-    'py', 'pyw', 'pyi',
-    'yaml', 'yml',
-    'bat', 'cmd', 'sh', 'bash',
-    'java', 'log',
+    'txt',
+    'md',
+    'markdown',
+    'mmd',
+    'mermaid',
+    'cpp',
+    'cc',
+    'cxx',
+    'c',
+    'h',
+    'hpp',
+    'hh',
+    'hxx',
+    'json',
+    'jsonc',
+    'xml',
+    'svg',
+    'xhtml',
+    'xsd',
+    'xsl',
+    'html',
+    'htm',
+    'shtml',
+    'css',
+    'scss',
+    'less',
+    'js',
+    'jsx',
+    'mjs',
+    'cjs',
+    'py',
+    'pyw',
+    'pyi',
+    'yaml',
+    'yml',
+    'bat',
+    'cmd',
+    'sh',
+    'bash',
+    'java',
+    'log',
   ];
 
   /// Binary files at or above this size (in bytes) are opened in on-demand
@@ -204,7 +238,8 @@ class EditorService extends ChangeNotifier {
         if (bytes == null) return false;
         await _fileKernel.writeBytes(tab.path!, bytes);
       } else {
-        await _fileKernel.write(tab.path!, tab.text, encodingLabel: tab.encoding);
+        await _fileKernel.write(tab.path!, tab.text,
+            encodingLabel: tab.encoding);
       }
       tab.markSaved(path: tab.path!, encoding: tab.encoding);
       notifyListeners();
@@ -265,6 +300,7 @@ class EditorService extends ChangeNotifier {
   String fileTypeLabelFor(EditorTabController tab) {
     if (tab.isPdf) return 'PDF 文档';
     if (tab.isWord) return 'Word 文档';
+    if (tab.isOfd) return 'OFD 文档';
     return _fileType.labelFor(tab.language);
   }
 
@@ -336,7 +372,8 @@ class EditorService extends ChangeNotifier {
             saved++;
           }
         } else {
-          await _fileKernel.write(tab.path!, tab.text, encodingLabel: tab.encoding);
+          await _fileKernel.write(tab.path!, tab.text,
+              encodingLabel: tab.encoding);
           tab.markSaved(path: tab.path!, encoding: tab.encoding);
           saved++;
         }
@@ -533,6 +570,7 @@ class EditorService extends ChangeNotifier {
     try {
       final isPdf = _pdf.isPdf(path);
       final isWord = _word.isWord(path);
+      final isOfd = _ofd.isOfd(path);
       final isBin = _binary.isBinary(path);
       if (isPdf) {
         // PDF: read raw bytes and bind as a binary tab; the UI detects the
@@ -544,6 +582,12 @@ class EditorService extends ChangeNotifier {
         // Word: read raw bytes and bind as a binary tab; the UI detects the
         // .doc/.docx extension and renders the WordViewer widget, which
         // hands the temp file to the system document viewer (read-only).
+        final bytes = await _fileKernel.readBytes(path);
+        final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
+        _tabs.add(tab);
+      } else if (isOfd) {
+        // OFD: read raw bytes and bind as a binary tab; the UI detects the
+        // .ofd extension and renders the in-app OfdViewer (fully offline).
         final bytes = await _fileKernel.readBytes(path);
         final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
         _tabs.add(tab);
@@ -559,7 +603,8 @@ class EditorService extends ChangeNotifier {
           _tabs.add(tab);
         } else {
           final bytes = await _fileKernel.readBytes(path);
-          final tab = EditorTabController()..bindBinary(path: path, bytes: bytes);
+          final tab = EditorTabController()
+            ..bindBinary(path: path, bytes: bytes);
           _tabs.add(tab);
         }
       } else {
@@ -662,7 +707,10 @@ class EditorService extends ChangeNotifier {
       String text;
       switch (encoding) {
         case 'UTF-8-BOM':
-          final body = raw.length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF
+          final body = raw.length >= 3 &&
+                  raw[0] == 0xEF &&
+                  raw[1] == 0xBB &&
+                  raw[2] == 0xBF
               ? raw.sublist(3)
               : raw;
           text = utf8.decode(body, allowMalformed: true);
@@ -689,7 +737,11 @@ class EditorService extends ChangeNotifier {
         default:
           text = utf8.decode(raw, allowMalformed: true);
       }
-      tab.bindFile(path: path, content: text, encoding: encoding, language: tab.language);
+      tab.bindFile(
+          path: path,
+          content: text,
+          encoding: encoding,
+          language: tab.language);
     } catch (_) {
       tab.setEncoding(encoding);
     }
@@ -746,7 +798,8 @@ class EditorService extends ChangeNotifier {
     if (sel.isCollapsed) return;
     final s = sel.start < sel.end ? sel.start : sel.end;
     final e = sel.start < sel.end ? sel.end : sel.start;
-    final text = c.text.substring(s.clamp(0, c.text.length), e.clamp(0, c.text.length));
+    final text =
+        c.text.substring(s.clamp(0, c.text.length), e.clamp(0, c.text.length));
     await Clipboard.setData(ClipboardData(text: text));
   }
 
@@ -759,9 +812,11 @@ class EditorService extends ChangeNotifier {
     final s = sel.start < sel.end ? sel.start : sel.end;
     final e = sel.start < sel.end ? sel.end : sel.start;
     final full = c.text;
-    final selected = full.substring(s.clamp(0, full.length), e.clamp(0, full.length));
+    final selected =
+        full.substring(s.clamp(0, full.length), e.clamp(0, full.length));
     await Clipboard.setData(ClipboardData(text: selected));
-    final newText = full.substring(0, s.clamp(0, full.length)) + full.substring(e.clamp(0, full.length));
+    final newText = full.substring(0, s.clamp(0, full.length)) +
+        full.substring(e.clamp(0, full.length));
     tab.text = newText;
     c.value = TextEditingValue(
       text: newText,

@@ -6,13 +6,13 @@ class AppInfo {
   const AppInfo._();
 
   /// Human-readable version label.
-  static const String version = '1.10.15';
+  static const String version = '1.10.16';
 
   /// Numeric version number, mirrors pubspec `version` field.
-  static const String versionNumber = '1.10.15';
+  static const String versionNumber = '1.10.16';
 
   /// Internal build number.
-  static const int buildNumber = 27;
+  static const int buildNumber = 28;
 
   /// Application display name.
   static const String name = '文件查看器';
@@ -46,6 +46,7 @@ class AppInfo {
     '导出 PDF（带可点击目录，内置中文字体，离线可用）',
     '二进制文件查看：.bin / .bit / .raw / .dat / .exe / .apk 十六进制查看与编辑',
     'Word 文档预览：.doc / .docx 调用系统查看器渲染（只读）',
+    'OFD 文档预览：.ofd 应用内离线渲染文字 / 线条 / 图片，支持多页浏览与缩放',
     '代码格式化：JSON / XML / C++ 基础排版',
     '跨平台语音播报：选中文本或全文播报，暂停 / 继续 / 停止',
     '行号显示、光标行列、文件大小、修改状态底部状态栏',
@@ -76,6 +77,17 @@ class AppInfo {
   /// Version change log, newest first. Rendered on the About page under
   /// "更新日志" so users can tell what each version changed.
   static const List<VersionChangeLog> changeLog = [
+    VersionChangeLog(
+      version: '1.10.16',
+      date: '2026-11-21',
+      title: '新增 OFD 文档预览',
+      changes: [
+        '新增：支持 .ofd 版式文档（中国国家标准公文 / 发票格式）的打开与预览',
+        '新增：应用内离线渲染 OFD 的文字、矢量线条与嵌入图片，无需安装 WPS 等第三方阅读器',
+        '新增：多页纵向浏览，页面自适应屏幕宽度，支持双指缩放与放大后拖动平移',
+        '新增：加密或特殊 OFD 无法解析时，可一键「用系统应用打开」交给 WPS / 福昕等阅读器',
+      ],
+    ),
     VersionChangeLog(
       version: '1.10.15',
       date: '2026-11-21',
