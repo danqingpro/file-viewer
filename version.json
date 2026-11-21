@@ -1,6 +1,6 @@
 {
   "latestVersion": "1.10.16",
   "apkUrl": "https://github.com/danqingpro/file-viewer/releases/download/v1.10.16/file-viewer-1.10.16.apk",
-  "changelog": "1.10.16：新增 OFD 版式文档预览——支持 .ofd 打开与多页浏览，应用内离线渲染文字、矢量线条与嵌入图片，无需安装 WPS；支持双指缩放与放大后拖动平移；无法解析时可一键用系统应用打开。",
+  "changelog": "1.10.16\uff1a\u65b0\u589e OFD \u7248\u5f0f\u6587\u6863\u9884\u89c8\u2014\u2014\u652f\u6301 .ofd \u6253\u5f00\u4e0e\u591a\u9875\u6d4f\u89c8\uff0c\u5e94\u7528\u5185\u79bb\u7ebf\u6e32\u67d3\u6587\u5b57\u3001\u77e2\u91cf\u7ebf\u6761\u4e0e\u5d4c\u5165\u56fe\u7247\uff0c\u65e0\u9700\u5b89\u88c5 WPS\uff1b\u652f\u6301\u53cc\u6307\u7f29\u653e\u4e0e\u653e\u5927\u540e\u62d6\u52a8\u5e73\u79fb\uff1b\u65e0\u6cd5\u89e3\u6790\u65f6\u53ef\u4e00\u952e\u7528\u7cfb\u7edf\u5e94\u7528\u6253\u5f00\u3002",
   "forceUpdate": false
 }

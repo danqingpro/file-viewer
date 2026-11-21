@@ -112,7 +112,7 @@ class UpdateService {
         ).timeout(const Duration(seconds: 12));
         if (resp.statusCode != 200) continue;
 
-        final json = _parseJson(resp.body);
+        final json = _parseJson(_bodyText(resp));
         if (json == null) continue;
 
         final info = UpdateInfo.fromJson(json);
@@ -173,7 +173,7 @@ class UpdateService {
     ).timeout(const Duration(seconds: 12));
     if (resp.statusCode != 200) return null;
 
-    final decoded = jsonDecode(resp.body);
+    final decoded = jsonDecode(_bodyText(resp));
     if (decoded is! Map) return null;
 
     final tag = (decoded['tag_name'] as String? ?? '')
@@ -210,7 +210,7 @@ class UpdateService {
     ).timeout(const Duration(seconds: 12));
     if (resp.statusCode != 200) return null;
 
-    final decoded = jsonDecode(resp.body);
+    final decoded = jsonDecode(_bodyText(resp));
     if (decoded is! Map) return null;
 
     final versions = decoded['versions'];
@@ -338,6 +338,15 @@ class UpdateService {
   }
 
   // ---- helpers -----------------------------------------------------------
+
+  /// Decodes a response body as UTF-8.
+  ///
+  /// `http` falls back to latin1 when the server omits `charset`, which is
+  /// exactly what GitHub does for release assets (`application/octet-stream`).
+  /// Decoding `body` directly therefore turned Chinese changelogs into
+  /// mojibake; the raw bytes are always UTF-8 in our manifests.
+  String _bodyText(http.Response resp) =>
+      utf8.decode(resp.bodyBytes, allowMalformed: true);
 
   /// Minimal JSON parser for the version manifest.
   Map<String, dynamic>? _parseJson(String body) {
